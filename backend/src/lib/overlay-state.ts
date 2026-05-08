@@ -15,6 +15,9 @@ export interface OverlayGame {
   duration: number;
   status: OverlayGameStatus;
   coverUrl: string | null;
+  /** Objective text for the run's current difficulty. Pre-resolved server-side
+   *  so the widget doesn't need to know about the normal/hardcore split. */
+  objective: string;
 }
 
 export interface OverlayState {
@@ -45,6 +48,9 @@ export function mapToOverlay(
     // for why we don't hotlink the Steam CDN directly.
     const coverUrl =
       g?.cover ?? (g?.appid ? `/api/steam/cover/${g.appid}` : null);
+    const objective = g
+      ? state.difficulty === "hardcore" ? g.hardcore : g.normal
+      : "";
     return {
       id,
       name: g?.name ?? `Game ${id}`,
@@ -56,6 +62,7 @@ export function mapToOverlay(
           ? "current"
           : "upcoming",
       coverUrl,
+      objective,
     };
   });
 

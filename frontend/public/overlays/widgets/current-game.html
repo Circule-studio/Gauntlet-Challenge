@@ -48,6 +48,31 @@
   }
   .card.has-cover .player-row { margin-bottom: 4px; }
   .card.has-cover .timer-pill { align-self: flex-start; }
+
+  /* Objective line — sits under the player row, above the timer. Wraps to
+     two lines max so a long objective doesn't blow the card height. */
+  .objective-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 4px;
+  }
+  .objective-row .objective-icon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin-top: 1px;
+    color: #fbbf24;
+  }
+  .objective-row .objective-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 </style>
 </head>
 <body>
@@ -106,6 +131,14 @@
       return;
     }
     applyCover(g.coverUrl || null);
+    const objectiveBlock = g.objective
+      ? `<div class="objective-row">
+           <svg class="objective-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+             <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+           </svg>
+           <span class="objective-text">${escapeHtml(g.objective)}</span>
+         </div>`
+      : '';
     content.innerHTML = `
       <div class="game-name">${escapeHtml(g.name)}</div>
       <div class="player-row">
@@ -114,6 +147,7 @@
         </svg>
         <span>${escapeHtml(g.player)}</span>
       </div>
+      ${objectiveBlock}
       <div class="timer-pill" id="timer">00:00:00</div>
     `;
   }

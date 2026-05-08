@@ -15,6 +15,7 @@ import steamRoutes from "./routes/steam";
 import overlayRoutes from "./routes/overlay";
 import statsRoutes from "./routes/stats";
 import twitchRoutes from "./routes/twitch";
+import gamesRoutes from "./routes/games";
 
 export function createApp(): Express {
   const app = express();
@@ -35,6 +36,7 @@ export function createApp(): Express {
   app.use("/api/overlay", overlayRoutes);
   app.use("/api/stats", statsRoutes);
   app.use("/api/twitch", twitchRoutes);
+  app.use("/api/games", gamesRoutes);
 
   // === Static frontend ===
   // `next build` (output: 'export') → frontend/out/ contient l'app statique.

@@ -2665,6 +2665,19 @@ body.shake { animation: none; }
 }
 .lobby-quick-links a:hover { color: var(--accent); }
 
+.lobby-admin-btn {
+  margin-top: 16px;
+  background: transparent;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  text-align: center;
+  text-decoration: none;
+}
+.lobby-admin-btn:hover {
+  background: var(--warn);
+  color: var(--bg-0);
+}
+
 /* === Twitch settings page === */
 .twitch-flash-success {
   color: #5fbf7f;
@@ -2970,4 +2983,264 @@ body.shake { animation: none; }
   .games-stats-head > :nth-child(6),
   .games-stats-row > :nth-child(6) { display: none; }
   .games-stats-cover { width: 26px; height: 38px; }
+}
+
+/* === GAMES EDITOR (admin) === */
+.ge-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+.ge-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+.ge-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+.ge-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.ge-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ge-error {
+  background: rgba(217, 107, 107, 0.1);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.ge-body {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.ge-list {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 200px);
+  position: sticky;
+  top: 16px;
+}
+.ge-list-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ge-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.ge-list-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(42, 46, 54, 0.5);
+  font-size: 13px;
+  align-items: baseline;
+  transition: background 0.1s;
+}
+.ge-list-item:hover { background: var(--bg-2); }
+.ge-list-item.is-selected {
+  background: rgba(108, 181, 212, 0.12);
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+.ge-list-id {
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 11px;
+  min-width: 38px;
+  flex-shrink: 0;
+}
+.ge-list-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ge-list-cat {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ge-empty-list {
+  list-style: none;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ge-editor {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 24px;
+}
+.ge-editor h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.ge-empty {
+  color: var(--muted);
+  padding: 48px 16px;
+  text-align: center;
+  font-size: 13px;
+}
+.ge-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ge-field {
+  display: block;
+  margin-bottom: 12px;
+}
+.ge-field-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.ge-input {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+.ge-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.ge-checkboxes {
+  display: flex;
+  gap: 16px;
+  margin: 4px 0 16px;
+  flex-wrap: wrap;
+}
+.ge-checkboxes label {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+.ge-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.ge-btn {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.ge-btn:hover:not(:disabled) {
+  background: var(--bg-0);
+  border-color: var(--accent);
+}
+.ge-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ge-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-0);
+  font-weight: 700;
+}
+.ge-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-0);
+}
+.ge-btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  margin-left: auto;
+}
+.ge-btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--bg-0);
+  border-color: var(--danger);
+}
+.ge-help {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 12px;
+  line-height: 1.6;
+}
+.ge-help code {
+  background: var(--bg-2);
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 900px) {
+  .ge-body { grid-template-columns: 1fr; }
+  .ge-list {
+    max-height: 400px;
+    position: static;
+  }
+  .ge-grid { grid-template-columns: 1fr; }
 }

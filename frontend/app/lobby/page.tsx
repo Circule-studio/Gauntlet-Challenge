@@ -10,6 +10,13 @@ interface TwitchSummary {
   displayName: string;
 }
 
+// Mirrors the allowlist in backend/src/routes/games.ts. Hiding the link is UX
+// only — the API enforces the real check.
+const GAMES_EDITORS = new Set([
+  "76561198285334414",
+  "76561198300061591",
+]);
+
 export default function LobbyPage() {
   const router = useRouter();
   const [user, setUser] = useState<SteamSessionUser | null>(null);
@@ -193,6 +200,12 @@ export default function LobbyPage() {
             Rejoindre
           </button>
         </form>
+
+        {GAMES_EDITORS.has(user.steamId) && (
+          <a href="/admin/games/" className="auth-btn lobby-admin-btn">
+            Admin — éditer les jeux
+          </a>
+        )}
 
         {error && <p className="auth-error">{error}</p>}
       </div>

@@ -90,6 +90,23 @@ function TwitchBody() {
     }
   };
 
+  const toggleAutoCategory = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/twitch/auto-category", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) throw new Error(`http_${res.status}`);
+      await refresh();
+    } catch (e) {
+      setError(`Échec : ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <TwitchShell>
       <h1 className="profile-name" style={{ marginBottom: 0 }}>Intégration Twitch</h1>
@@ -165,6 +182,26 @@ function TwitchBody() {
               {busy ? "Déconnexion…" : "Déconnecter Twitch"}
             </button>
           </div>
+
+          <section>
+            <h2 className="profile-section-title">Catégorie automatique</h2>
+            <label className="twitch-auto-cat">
+              <input
+                type="checkbox"
+                checked={status.autoCategory}
+                disabled={busy || !status.canAutoCategory}
+                onChange={(e) => toggleAutoCategory(e.target.checked)}
+              />
+              <span>
+                Mettre à jour la catégorie de ma chaîne Twitch quand le jeu en cours change.
+              </span>
+            </label>
+            {!status.canAutoCategory && (
+              <p className="auth-subtitle twitch-auto-cat-hint">
+                Cette option nécessite la permission <code>channel:manage:broadcast</code>. Reconnecte ton Twitch pour l&apos;accorder.
+              </p>
+            )}
+          </section>
 
           <section>
             <h2 className="profile-section-title">Effets configurés</h2>

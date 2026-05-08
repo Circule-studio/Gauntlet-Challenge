@@ -16,6 +16,9 @@ export interface TwitchLink {
   scopes: string[];
   createdAt: number;
   updatedAt: number;
+  /** Opt-in: when true, the broadcaster's Twitch category auto-updates as the
+   *  current gauntlet game changes. Requires the channel:manage:broadcast scope. */
+  autoCategory: boolean;
 }
 
 interface TwitchLinkRow {
@@ -29,6 +32,7 @@ interface TwitchLinkRow {
   scopes: string;
   created_at: number;
   updated_at: number;
+  auto_category: number;
 }
 
 function rowToLink(r: TwitchLinkRow): TwitchLink {
@@ -43,6 +47,7 @@ function rowToLink(r: TwitchLinkRow): TwitchLink {
     scopes: r.scopes ? r.scopes.split(" ").filter(Boolean) : [],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    autoCategory: !!r.auto_category,
   };
 }
 
@@ -131,6 +136,13 @@ export function updateTokens(
 
 export function deleteLink(steamId: string): boolean {
   const info = getDb().prepare(`DELETE FROM twitch_links WHERE steam_id = ?`).run(steamId);
+  return info.changes > 0;
+}
+
+export function setAutoCategory(steamId: string, value: boolean): boolean {
+  const info = getDb()
+    .prepare(`UPDATE twitch_links SET auto_category = ?, updated_at = ? WHERE steam_id = ?`)
+    .run(value ? 1 : 0, Date.now(), steamId);
   return info.changes > 0;
 }
 

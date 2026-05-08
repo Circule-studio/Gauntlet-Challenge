@@ -53,6 +53,10 @@ export type TwitchFullStatus =
       displayName: string;
       eventsub: EventSubStatusPayload;
       effects: EffectStatus[];
+      autoCategory: boolean;
+      /** False when the linked token doesn't carry the channel:manage:broadcast
+       *  scope — the user must reconnect Twitch before the toggle has effect. */
+      canAutoCategory: boolean;
     };
 
 export interface TwitchEvent {

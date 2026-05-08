@@ -82,7 +82,8 @@ const MIGRATIONS = `
     expires_at      INTEGER NOT NULL,
     scopes          TEXT NOT NULL,
     created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL
+    updated_at      INTEGER NOT NULL,
+    auto_category   INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_twitch_links_broadcaster ON twitch_links(broadcaster_id);
 
@@ -131,9 +132,20 @@ export function getDb(): Database.Database {
   mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path);
   db.exec(MIGRATIONS);
+  // Idempotent ALTERs for columns introduced after the table existed in the
+  // wild. SQLite has no IF NOT EXISTS for ADD COLUMN, so we PRAGMA-check first.
+  ensureColumn(db, "twitch_links", "auto_category", "INTEGER NOT NULL DEFAULT 0");
   _db = db;
   console.log(`[db] opened sqlite at ${path}`);
   return db;
+}
+
+interface PragmaColumn { name: string }
+function ensureColumn(db: Database.Database, table: string, column: string, decl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as PragmaColumn[];
+  if (cols.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  console.log(`[db] added column ${table}.${column}`);
 }
 
 export function closeDb(): void {

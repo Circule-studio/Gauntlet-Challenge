@@ -2783,6 +2783,28 @@ body.shake { animation: none; }
 .twitch-eventsub-state.state-stopping     { color: rgba(208, 211, 217, 0.5); }
 .twitch-eventsub-error { color: #d96b6b; font-size: 11px; }
 
+.twitch-auto-cat {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 6px 0;
+}
+.twitch-auto-cat input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.twitch-auto-cat input[disabled] + span { opacity: 0.55; }
+.twitch-auto-cat-hint { font-size: 11px; margin-top: 4px; }
+.twitch-auto-cat-hint code {
+  background: var(--bg-2);
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 10px;
+}
+
 .twitch-effects {
   list-style: none;
   padding: 0;

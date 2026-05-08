@@ -107,6 +107,60 @@ export async function getSelfUser(accessToken: string): Promise<TwitchUser> {
   return body.data[0];
 }
 
+export interface HelixGame {
+  id: string;
+  name: string;
+  box_art_url?: string;
+}
+
+/**
+ * Resolve a Twitch category by exact name (case-insensitive). Returns null when
+ * Twitch doesn't have a matching category — the caller decides whether to log
+ * and skip or fall back to a manual id.
+ */
+export async function getHelixGameByName(
+  name: string,
+  accessToken: string,
+): Promise<HelixGame | null> {
+  const url = `${HELIX_BASE}/games?name=${encodeURIComponent(name)}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Client-Id": env.TWITCH_CLIENT_ID,
+    },
+  });
+  const body = await readJsonOrThrow<{ data: HelixGame[] }>(res, "games by name");
+  return body.data?.[0] ?? null;
+}
+
+/**
+ * Update a broadcaster's stream category. Requires the
+ * `channel:manage:broadcast` scope on the access token. Twitch returns 204 on
+ * success.
+ */
+export async function modifyChannelGame(
+  broadcasterId: string,
+  gameId: string,
+  accessToken: string,
+): Promise<void> {
+  const res = await fetch(
+    `${HELIX_BASE}/channels?broadcaster_id=${encodeURIComponent(broadcasterId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Client-Id": env.TWITCH_CLIENT_ID,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ game_id: gameId }),
+    },
+  );
+  if (res.status !== 204) {
+    const text = await res.text().catch(() => "");
+    throw new TwitchApiError(res.status, text, `modify channel failed (${res.status})`);
+  }
+}
+
 /**
  * Return a Twitch access token usable right now for a given Steam user, refreshing
  * with the stored refresh_token if the current one is expiring within the leeway.

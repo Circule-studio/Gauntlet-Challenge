@@ -16,6 +16,7 @@ import {
   getLinkBySteamId,
   listRewards,
   listTwitchEvents,
+  setAutoCategory,
   upsertLink,
 } from "../lib/twitch-store";
 import { ensureRewards, tearDownRewards } from "../lib/twitch-rewards";
@@ -33,7 +34,12 @@ const SCOPES = [
   "channel:read:redemptions",
   "channel:manage:redemptions",
   "bits:read",
+  // Required for the auto-category feature (PATCH /helix/channels). Users who
+  // connected before this scope was added will see canAutoCategory=false until
+  // they reconnect.
+  "channel:manage:broadcast",
 ];
+const AUTO_CATEGORY_SCOPE = "channel:manage:broadcast";
 const STATE_TTL_SECONDS = 600; // 10 min — enough for a slow Twitch login.
 
 interface OAuthState {
@@ -75,6 +81,8 @@ router.get("/me", requireAuth, (req, res) => {
     displayName: link.displayName,
     scopes: link.scopes,
     connectedAt: link.createdAt,
+    autoCategory: link.autoCategory,
+    canAutoCategory: link.scopes.includes(AUTO_CATEGORY_SCOPE),
   });
 });
 
@@ -208,7 +216,30 @@ router.get("/status", requireAuth, (req, res) => {
       lastError: null,
     },
     effects,
+    autoCategory: link.autoCategory,
+    canAutoCategory: link.scopes.includes(AUTO_CATEGORY_SCOPE),
   });
+});
+
+/**
+ * Toggle the per-user "auto-update Twitch category from current game" setting.
+ * Requires a connected Twitch link. Enabling without the broadcast scope is
+ * accepted but the actual API call will fail at fire-time — UI is expected to
+ * gate this on canAutoCategory and prompt for reconnect.
+ */
+router.post("/auto-category", requireAuth, (req, res) => {
+  const link = getLinkBySteamId(req.user!.steamId);
+  if (!link) {
+    res.status(404).json({ error: "no_twitch_link" });
+    return;
+  }
+  const body = (req.body ?? {}) as { enabled?: unknown };
+  if (typeof body.enabled !== "boolean") {
+    res.status(400).json({ error: "enabled must be boolean" });
+    return;
+  }
+  setAutoCategory(req.user!.steamId, body.enabled);
+  res.json({ ok: true, autoCategory: body.enabled });
 });
 
 /** Recent activity log for the current user's broadcaster (capped at 50). */

@@ -18,6 +18,7 @@ import type { RoomEvent, RoomMember, RoomSnapshot } from "@shared/types/room";
 import { mapToOverlay, type OverlayState } from "./overlay-state";
 import { recordRun } from "./db";
 import { getLinkBySteamId } from "./twitch-store";
+import { triggerCategoryUpdate } from "./twitch-category";
 
 const MAX_MEMBERS = 8;
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000; // 12h since last activity (active rooms)
@@ -516,6 +517,12 @@ function applyMutation(r: Room, next: GauntletState): RoomSnapshot {
   touch(r);
   broadcast(r, { type: "state", state: next });
   broadcastOverlay(r);
+
+  // Auto-update each opted-in member's Twitch category when the active game
+  // changes. Background fire-and-forget — never blocks the live mutation.
+  if (runRunning && nextGameId !== null && nextGameId !== prevGameId) {
+    triggerCategoryUpdate(Array.from(r.members.keys()), nextGameId);
+  }
 
   if (persistedDurations) {
     const members = Array.from(r.members.values());

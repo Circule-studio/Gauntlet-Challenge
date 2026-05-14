@@ -378,28 +378,6 @@ function RoomPageInner() {
     return () => clearInterval(id);
   }, [state.countdownStartedAt]);
 
-  // === AUTO-LAUNCH — host triggers the countdown once all humans are ready ===
-  useEffect(() => {
-    if (!isHost) return;
-    if (!state.pendingRun) return;
-    if (state.countdownStartedAt !== null) return;
-    const humans = members.filter((m) => !isSyntheticId(m.steamId));
-    if (humans.length === 0) return;
-    const ready = new Set(state.readyPlayers ?? []);
-    const allReady = humans.every((m) => ready.has(m.steamId));
-    if (!allReady) return;
-    const ups: Record<string, { joker: number; shield: number; reroll: number }> = {};
-    if (state.powerUpsEnabled !== false) {
-      members.forEach((m) => { ups[m.steamId] = { joker: 1, shield: 1, reroll: 1 }; });
-    }
-    setState((s) => ({
-      ...s,
-      countdownStartedAt: Date.now(),
-      powerUps: ups,
-      shieldActive: false,
-    }));
-  }, [isHost, state.pendingRun, state.countdownStartedAt, state.readyPlayers, members, state.powerUpsEnabled, setState]);
-
   // === LAUNCH — host-only commit when the countdown finishes ===
   // We funnel the "commit run" mutation through the host so two clients can't
   // race to set runStartTime. Every other client just renders the countdown.
@@ -676,7 +654,15 @@ function RoomPageInner() {
  }, [shaking]);
 
  // === HELPERS ===
- const update = (patch: Partial<GauntletState>) => setState((s) => ({ ...s, ...patch }));
+ const update = (patch: Partial<GauntletState>) => setState((s) => {
+   const next = { ...s, ...patch };
+   // If runLength shrinks, trim pinned to the new cap (floor(runLength / 2)).
+   if (patch.runLength !== undefined) {
+     const cap = Math.max(1, Math.floor(next.runLength / 2));
+     if (next.pinned.length > cap) next.pinned = next.pinned.slice(0, cap);
+   }
+   return next;
+ });
 
  const leaveRoom = async () => {
    await fetch(`/api/room/${roomCode}/leave`, { method: "POST" }).catch(() => {});
@@ -712,17 +698,21 @@ function RoomPageInner() {
    }
  };
 
+ // Pinned cap scales with run length — half the run, rounded down. Keeps the
+ // original 5-pin cap at 10 games while adapting (2 pins for 5 games, etc).
+ const pinCap = (rl: number) => Math.max(1, Math.floor(rl / 2));
  const togglePin = (id: number) => {
  setState((s) => {
  if (s.pinned.includes(id)) {
  return { ...s, pinned: s.pinned.filter((x) => x !== id) };
- } else if (s.pinned.length < 5) {
+ }
+ const cap = pinCap(s.runLength ?? 10);
+ if (s.pinned.length < cap) {
  playClick();
  return { ...s, pinned: [...s.pinned, id] };
- } else {
- alert("Maximum 5 jeux épinglés. Retire-en un avant d'en ajouter un autre.");
- return s;
  }
+ alert(`Maximum ${cap} jeu${cap > 1 ? "x" : ""} épinglé${cap > 1 ? "s" : ""} pour une run de ${s.runLength ?? 10}. Augmente la longueur ou retire-en un.`);
+ return s;
  });
  };
 
@@ -749,7 +739,9 @@ function RoomPageInner() {
      const ownedSets = libs.map((l) => new Set(l.appIds));
      candidates = candidates.filter((g) => {
        if (!g.appid) return false; // library-only mode excludes non-Steam games
-       return ownedSets.every((s) => s.has(g.appid as number));
+       // Only one member needs to own the game — the team can rely on that
+       // person to run / share it.
+       return ownedSets.some((s) => s.has(g.appid as number));
      });
    } catch (e) {
      console.warn("[generateRun] library fetch failed", e);
@@ -757,7 +749,10 @@ function RoomPageInner() {
      return;
    }
  }
- const remainingNeeded = 10 - pinned.length;
+ const runLength = Math.max(1, Math.min(10, state.runLength || 10));
+ // Pinned games can never exceed the chosen run length — trim if needed.
+ if (pinned.length > runLength) pinned.length = runLength;
+ const remainingNeeded = runLength - pinned.length;
  if (remainingNeeded > candidates.length) {
    alert(
      state.libraryOnlyMode
@@ -1364,7 +1359,7 @@ function RoomPageInner() {
  {/* HERO */}
  <div className="hero">
  <h1>GAUNTLET CHALLENGE</h1>
- <div className="subtitle">10 jeux · 0 défaite autorisée</div>
+ <div className="subtitle">{state.run.length || (state.runLength ?? 10)} jeux · 0 défaite autorisée</div>
  <div className="lives">
             <span>#</span><span className="lives-num">{state.attempt}</span>
           </div>
@@ -1576,6 +1571,32 @@ function RoomPageInner() {
  </div>
 
  <div className="field"style={{ marginTop: 18 }}>
+ <label>
+   Longueur de la run
+   <span className="run-length-value">{state.runLength ?? 10} jeux</span>
+ </label>
+ <div className="run-length-slider-wrap">
+   <input
+     type="range"
+     className="run-length-slider"
+     min={1}
+     max={10}
+     step={1}
+     value={state.runLength ?? 10}
+     onChange={(e) => update({ runLength: Math.max(1, Math.min(10, Number(e.target.value))) })}
+     disabled={runLocked || !isHost}
+     aria-label="Longueur de la run"
+     style={{ "--pct": `${((state.runLength ?? 10) - 1) / 9 * 100}%` } as React.CSSProperties}
+   />
+   <div className="run-length-ticks" aria-hidden="true">
+     {Array.from({ length: 10 }, (_, i) => (
+       <span key={i} className={`run-length-tick ${i + 1 <= (state.runLength ?? 10) ? "on" : ""}`}>{i + 1}</span>
+     ))}
+   </div>
+ </div>
+ </div>
+
+ <div className="field"style={{ marginTop: 18 }}>
  <label>Bibliothèque Steam uniquement</label>
  <div className="toggle-group">
  <button
@@ -1589,13 +1610,13 @@ function RoomPageInner() {
    className={`toggle ${state.libraryOnlyMode ? "active" : ""}`}
    onClick={() => update({ libraryOnlyMode: true })}
    disabled={runLocked || !isHost}
-   title="Ne tirer que des jeux que tous les joueurs ont dans leur bibliothèque Steam"
+   title="Ne tirer que des jeux qu'au moins un joueur a dans sa bibliothèque Steam"
  >
    Bibliothèque commune
  </button>
  </div>
  <p className="field-hint">
-   Quand activé, seuls les jeux Steam que <strong>tous les membres</strong> possèdent sont tirés au sort.
+   Quand activé, seuls les jeux Steam qu'<strong>au moins un membre</strong> possède sont tirés au sort.
  </p>
  </div>
 
@@ -1652,7 +1673,7 @@ function RoomPageInner() {
 
  {/* POOL */}
  <div className="panel">
- <h2><span className="panel-title"><span className="panel-section-num">2</span> Sélection du pool</span><span className="badge">{state.pinned.length} / 5 épinglés</span>
+ <h2><span className="panel-title"><span className="panel-section-num">2</span> Sélection du pool</span><span className="badge">{state.pinned.length} / {pinCap(state.runLength ?? 10)} épinglés</span>
  </h2>
  <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 14 }}>
  Clique pour <strong style={{ color: "var(--gold)" }}>épingler jusqu&apos;à 5 jeux</strong> qui seront forcés dans la run. Les autres sont tirés au sort dans le reste du pool.
@@ -1733,7 +1754,7 @@ function RoomPageInner() {
    disabled={!isHost}
    title={!isHost ? "Seul l'hôte peut générer la run" : undefined}
  >
- {state.run.length > 0 ? <><Icon name="sparkles" /> Régénérer une nouvelle run</> : <><Icon name="sparkles" /> Générer la run (10 jeux)</>}
+ {state.run.length > 0 ? <><Icon name="sparkles" /> Régénérer une nouvelle run</> : <><Icon name="sparkles" /> Générer la run ({state.runLength ?? 10} jeux)</>}
  </button>
  <button
    className="btn btn-large btn-reroll"
@@ -2405,11 +2426,21 @@ function RoomPageInner() {
        );
      })()
    )}
-   {isHost && (
-     <button className="btn btn-large btn-start" onClick={launchCountdown} title="Forcer le départ sans attendre tout le monde">
-       <Icon name="sparkles" /> Lancer maintenant
-     </button>
-   )}
+   {isHost && (() => {
+     const humans = members.filter((m) => !isSyntheticId(m.steamId));
+     const ready = new Set(state.readyPlayers ?? []);
+     const allReady = humans.length > 0 && humans.every((m) => ready.has(m.steamId));
+     return (
+       <button
+         className="btn btn-large btn-start"
+         onClick={launchCountdown}
+         disabled={!allReady}
+         title={allReady ? "Lancer la run" : "En attente que tous les joueurs soient prêts"}
+       >
+         <Icon name="sparkles" /> Lancer maintenant
+       </button>
+     );
+   })()}
  </div>
  </div>
  </div>

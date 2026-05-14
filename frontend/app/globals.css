@@ -1839,6 +1839,99 @@ html, body {
   color: var(--text);
 }
 .btn-achievement:disabled { opacity: 0.6; cursor: default; }
+.run-length-value {
+  float: right;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.run-length-slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.run-length-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  margin: 4px 0;
+  padding: 0;
+  border: 0;
+}
+.run-length-slider:disabled { opacity: 0.5; cursor: not-allowed; }
+.run-length-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--pct, 100%),
+    var(--line) var(--pct, 100%),
+    var(--line) 100%
+  );
+  border: 1px solid var(--line);
+  box-sizing: border-box;
+}
+.run-length-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--pct, 100%),
+    var(--line) var(--pct, 100%),
+    var(--line) 100%
+  );
+  border: 1px solid var(--line);
+  box-sizing: border-box;
+}
+.run-length-slider::-moz-range-progress {
+  height: 8px;
+  background: var(--accent);
+  border-radius: 999px 0 0 999px;
+}
+.run-length-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-0);
+  cursor: pointer;
+  margin-top: -6px;
+  transition: transform 0.1s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.run-length-slider:hover::-webkit-slider-runnable-track { filter: brightness(1.05); }
+.run-length-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
+.run-length-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-0);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.run-length-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 2px;
+  user-select: none;
+}
+.run-length-tick.on { color: var(--text); font-weight: 600; }
 .slot-machine.locked .slot-strip { animation: none; }
 .slot-sep {
   flex-shrink: 0;

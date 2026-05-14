@@ -130,6 +130,8 @@ export interface GauntletState {
   versusMode: boolean;
   teams: Record<string, "red" | "blue">; // steamId → team
   gameWinners: Record<number, "red" | "blue">; // gameId → winning team
+  // Number of games per run. Default 10; can be reduced for quicker sessions.
+  runLength: number;
 }
 
 export const DEFAULT_STATE: GauntletState = {
@@ -166,4 +168,5 @@ export const DEFAULT_STATE: GauntletState = {
   versusMode: false,
   teams: {},
   gameWinners: {},
+  runLength: 10,
 };

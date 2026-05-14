@@ -30,6 +30,10 @@ export interface OverlayState {
   currentGameStartedAt: number | null;
   currentGameElapsed: number;
   games: OverlayGame[];
+  /** Absolute ms epoch for the per-game countdown (games with `timer: true`).
+   *  Null when no timer is running. Consumed by the browser extension and the
+   *  Twitch overlay widgets to render a synced countdown. */
+  timerDeadline: number | null;
 }
 
 const POOL_BY_ID = new Map(POOL.map((g) => [g.id, g]));
@@ -76,5 +80,6 @@ export function mapToOverlay(
     currentGameStartedAt: currentGameId !== null ? currentGameStartedAt : null,
     currentGameElapsed: 0,
     games,
+    timerDeadline: state.timerDeadline ?? null,
   };
 }

@@ -62,6 +62,48 @@ export async function getPlayerSummary(steamId: string): Promise<SteamPlayerSumm
  * Steam, which wipes the response and made everything look unowned. Filtering
  * locally against the full library is reliable.
  */
+export interface SteamPlayerAchievement {
+  apiname: string;
+  achieved: 0 | 1;
+  unlocktime: number;
+}
+
+/**
+ * GetPlayerAchievements. Returns the user's achievement state for a single
+ * Steam app. Cached 30s per (steamId, appid) — short enough that "verify"
+ * feels fresh, long enough to avoid hammering on a busy room.
+ *
+ * Throws HttpError 403 when the profile or game stats are private.
+ */
+export async function getPlayerAchievements(
+  steamId: string,
+  appid: number,
+): Promise<SteamPlayerAchievement[]> {
+  const cacheKey = `ach:${steamId}:${appid}`;
+  const cached = cache.get<SteamPlayerAchievement[]>(cacheKey);
+  if (cached !== undefined) return cached;
+  const params = new URLSearchParams({
+    key: env.STEAM_API_KEY,
+    steamid: steamId,
+    appid: String(appid),
+  });
+  const url = `${API_BASE}/ISteamUserStats/GetPlayerAchievements/v1/?${params.toString()}`;
+  const res = await steamFetch(url);
+  if (res.status === 401 || res.status === 403) {
+    throw new HttpError(403, "Profil Steam privé ou succès non accessibles");
+  }
+  if (res.status === 400) {
+    // Steam returns 400 when the game has no public achievements schema.
+    cache.set(cacheKey, [], 30);
+    return [];
+  }
+  if (!res.ok) throw new HttpError(502, `Steam API error ${res.status}`);
+  const data = (await res.json()) as { playerstats?: { achievements?: SteamPlayerAchievement[]; success?: boolean } };
+  const list = data.playerstats?.achievements ?? [];
+  cache.set(cacheKey, list, 30);
+  return list;
+}
+
 export async function getOwnedGames(steamId: string): Promise<SteamOwnedGame[]> {
   const cacheKey = `games:${steamId}`;
   const cached = cache.get<SteamOwnedGame[]>(cacheKey);

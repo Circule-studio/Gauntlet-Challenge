@@ -85,7 +85,6 @@ export const POOL: Game[] = [
  { id: 84, name: "Mimesis", cat: "Horror Coop", mode: "team", normal: "Survivre une partie en coop", hardcore: "Survivre sans qu'aucun coéquipier ne se fasse imiter", appid: 2827200 },
  { id: 85, name: "YapYap", cat: "Horror Coop", mode: "team", normal: "Atteindre l'objectif de vandalisme en coop", hardcore: "Atteindre l'objectif sans se faire repérer", appid: 3834090, cover: "/covers/yapyap.png" },
  { id: 86, name: "Super Meat Boy 3D", cat: "Solo Champion", mode: "solo", normal: "Joueur tiré finit un niveau Light World", hardcore: "Joueur tiré finit un niveau Dark World", appid: 3288210, cover: "/covers/super-meat-boy-3d.jpg" },
- { id: 87, name: "Ultimate Godspeed", cat: "Racing", mode: "team", normal: "Win une course", hardcore: "Win 3 courses d'affilée", appid: 1435750 },
  { id: 88, name: "UpGun", cat: "Party", mode: "team", normal: "Win un round", hardcore: "Win 3 rounds d'affilée", appid: 1575870 },
  { id: 89, name: "Party Animals", cat: "Party", mode: "team", normal: "Win un match", hardcore: "Win 3 matchs d'affilée", appid: 1260320 },
  { id: 91, name: "Slopecrashers", cat: "Sport", mode: "team", normal: "Win une descente", hardcore: "Win 3 descentes d'affilée", appid: 1619580 },

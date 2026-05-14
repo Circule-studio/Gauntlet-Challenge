@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { POOL, getCategories, effectiveMode } from "@/lib/games";
 import { CAT_ICONS } from "@/lib/icons";
@@ -115,6 +115,101 @@ function fmtDate(ts: number): string {
 // into cooperating pairs of 2 ("A & B" for one duo, "A & B · C & D" for two
 // parallel duos, etc.). The two duos play the objective independently — they
 // aren't versus each other.
+// Verifies a Steam achievement is unlocked for the current user and, if so,
+// auto-marks the game as won. Polls every 30s while mounted; "Vérifier" button
+// triggers an immediate refresh.
+function AchievementCheck({
+  gameId,
+  appid,
+  apiname,
+  label,
+  onUnlocked,
+}: {
+  gameId: number;
+  appid: number;
+  apiname: string;
+  label?: string;
+  onUnlocked: () => void;
+}) {
+  const [status, setStatus] = useState<"idle" | "checking" | "unlocked" | "locked" | "private">("idle");
+  const firedRef = useRef(false);
+  const check = async (silent = false) => {
+    if (!silent) setStatus("checking");
+    try {
+      const r = await fetch(`/api/steam/achievement/${appid}/${encodeURIComponent(apiname)}`, { credentials: "include" });
+      if (r.status === 403) { setStatus("private"); return; }
+      if (!r.ok) { if (!silent) setStatus("idle"); return; }
+      const data = await r.json() as { unlocked: boolean; known: boolean };
+      if (data.unlocked) {
+        setStatus("unlocked");
+        if (!firedRef.current) {
+          firedRef.current = true;
+          onUnlocked();
+        }
+      } else {
+        setStatus(data.known ? "locked" : "private");
+      }
+    } catch {
+      if (!silent) setStatus("idle");
+    }
+  };
+  useEffect(() => {
+    void check(true);
+    const id = setInterval(() => void check(true), 30_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, appid, apiname]);
+
+  return (
+    <div className={`achievement-check status-${status}`}>
+      <span className="achievement-label">
+        🏆 Succès Steam : <strong>{label ?? apiname}</strong>
+      </span>
+      <button
+        type="button"
+        className="btn btn-achievement"
+        onClick={() => void check(false)}
+        disabled={status === "checking"}
+      >
+        {status === "checking" ? "…" :
+         status === "unlocked" ? "Débloqué ✓" :
+         status === "private" ? "Profil privé" :
+         status === "locked" ? "Vérifier à nouveau" :
+         "Vérifier"}
+      </button>
+    </div>
+  );
+}
+
+// Renders a formatted champion string with each name preceded by its avatar.
+// Falls back to plain text when no avatar map is available (history view, etc).
+function ChampionName({
+  text,
+  nameToAvatar,
+}: {
+  text: string;
+  nameToAvatar?: Record<string, string>;
+}) {
+  if (!nameToAvatar) return <span className="name">{text}</span>;
+  // Split on pair separators while keeping them as literal tokens we can replay
+  // in the JSX. We don't try to interpret structure — we just walk the tokens.
+  const tokens = text.split(/( & | · )/);
+  return (
+    <span className="name champion-name-with-avatars">
+      {tokens.map((tok, i) => {
+        if (tok === " & " || tok === " · ") return <span key={i} className="champion-sep">{tok}</span>;
+        const av = nameToAvatar[tok];
+        return (
+          <span key={i} className="champion-pick">
+            {av && <img className="champion-avatar" src={av} alt="" />}
+            <span className="champion-pick-name">{tok}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function formatChampion(picks: string[], pairSize: number): string {
  if (picks.length === 0) return "";
  if (pairSize <= 1) return picks.join(" & ");
@@ -143,18 +238,41 @@ function RoomPageInner() {
  useEffect(() => {
    if (!roomCode) router.replace("/lobby");
  }, [roomCode, router]);
- const { state, setState, members, connected, closed, addBot, removeBot } = useRoom(roomCode);
+ const { state, setState, members, ownerSteamId, connected, closed, addBot, removeBot, startTimer: socketStartTimer, clearTimer: socketClearTimer } = useRoom(roomCode);
  const me = useMe();
+ const isHost = !!me && !!ownerSteamId && me.steamId === ownerSteamId;
+ // Map displayName -> avatarUrl for the champion slot machine. Names are unique
+ // within a room (the lobby enforces this), so a flat map is safe.
+ const nameToAvatar = useMemo(() => {
+   const map: Record<string, string> = {};
+   for (const m of members) {
+     if (m.displayName && m.avatarUrl) map[m.displayName] = m.avatarUrl;
+   }
+   return map;
+ }, [members]);
  const hydrated = true;
  const [localSearch, setLocalSearch] = useState("");
  const [localFilter, setLocalFilter] = useState("all");
  const [overlay, setOverlay] = useState<{ kind: "win" | "lose" | null; msg?: string }>({ kind: null });
  const [swappedIdx, setSwappedIdx] = useState<number | null>(null);
  const [shaking, setShaking] = useState(false);
- const [pendingRun, setPendingRun] = useState<number[] | null>(null);
- const [reviewing, setReviewing] = useState(false);
- const [countdown, setCountdown] = useState<number | null>(null);
  const [now, setNow] = useState<number>(Date.now());
+ // Shared review modal — `pendingRun`, ready states and countdown all live in
+ // `state` so every member sees the same view. Derived flags below keep the
+ // existing render logic compatible.
+ const pendingRun = state.pendingRun ?? null;
+ const reviewing = pendingRun !== null && state.countdownStartedAt === null;
+ const COUNTDOWN_MS = 3000;
+ const countdownDigit: number | null = (() => {
+   const start = state.countdownStartedAt;
+   if (start === null) return null;
+   const elapsed = now - start;
+   const remaining = Math.ceil((COUNTDOWN_MS - elapsed) / 1000);
+   if (remaining > 0) return remaining;
+   // ~600ms "GO" window then the countdown auto-clears via the launch effect.
+   return 0;
+ })();
+ const countdown = countdownDigit;
  // Per-game timer duration the local user has dialled in (minutes). Synced
  // deadline lives in `state.timerDeadline`; this is just the input box.
  const [timerInputMin, setTimerInputMin] = useState<number>(5);
@@ -253,31 +371,70 @@ function RoomPageInner() {
     return () => clearInterval(interval);
   }, [state.runStartTime, state.run.length, state.done.length]);
 
-  // === COUNTDOWN ===
+  // === COUNTDOWN — ticks while countdownStartedAt is set ===
   useEffect(() => {
-    if (countdown === null) return;
-    if (countdown > 0) {
-      const t = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000);
-      return () => clearTimeout(t);
+    if (state.countdownStartedAt === null) return;
+    const id = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(id);
+  }, [state.countdownStartedAt]);
+
+  // === AUTO-LAUNCH — host triggers the countdown once all humans are ready ===
+  useEffect(() => {
+    if (!isHost) return;
+    if (!state.pendingRun) return;
+    if (state.countdownStartedAt !== null) return;
+    const humans = members.filter((m) => !isSyntheticId(m.steamId));
+    if (humans.length === 0) return;
+    const ready = new Set(state.readyPlayers ?? []);
+    const allReady = humans.every((m) => ready.has(m.steamId));
+    if (!allReady) return;
+    const ups: Record<string, { joker: number; shield: number; reroll: number }> = {};
+    if (state.powerUpsEnabled !== false) {
+      members.forEach((m) => { ups[m.steamId] = { joker: 1, shield: 1, reroll: 1 }; });
     }
-    // countdown reached 0 -> start the run
-    if (pendingRun) {
-      setState((s) => ({
-        ...s,
-        run: pendingRun,
-        current: 0,
-        done: [],
-        champions: {},
-        attempt: 1,
-        runStartTime: Date.now(),
-        timerDeadline: null,
-        runFails: {},
-      }));
-      setPendingRun(null);
+    setState((s) => ({
+      ...s,
+      countdownStartedAt: Date.now(),
+      powerUps: ups,
+      shieldActive: false,
+    }));
+  }, [isHost, state.pendingRun, state.countdownStartedAt, state.readyPlayers, members, state.powerUpsEnabled, setState]);
+
+  // === LAUNCH — host-only commit when the countdown finishes ===
+  // We funnel the "commit run" mutation through the host so two clients can't
+  // race to set runStartTime. Every other client just renders the countdown.
+  useEffect(() => {
+    if (!isHost) return;
+    if (state.countdownStartedAt === null) return;
+    if (!state.pendingRun) return;
+    const elapsed = Date.now() - state.countdownStartedAt;
+    const remaining = COUNTDOWN_MS - elapsed + 600; // small "GO" tail
+    const launch = () => {
+      setState((s) => {
+        if (!s.pendingRun) return s;
+        return {
+          ...s,
+          run: s.pendingRun,
+          current: 0,
+          done: [],
+          champions: {},
+          attempt: 1,
+          runStartTime: Date.now(),
+          timerDeadline: null,
+          runFails: {},
+          pendingRun: null,
+          readyPlayers: [],
+          countdownStartedAt: null,
+        };
+      });
+    };
+    if (remaining <= 0) {
+      launch();
+      return;
     }
-    const t = setTimeout(() => setCountdown(null), 600);
+    const t = setTimeout(launch, remaining);
     return () => clearTimeout(t);
-  }, [countdown, pendingRun]);
+  }, [isHost, state.countdownStartedAt, state.pendingRun, setState]);
 
  // === SLOT MACHINE ANIMATION ===
  // Driven entirely by `state.drawing`. Every client receiving the broadcast
@@ -569,53 +726,139 @@ function RoomPageInner() {
  });
  };
 
- const generateRun = () => {
- const pinned = [...state.pinned];
- const others = POOL.filter((g) => !pinned.includes(g.id));
- const remainingNeeded = 10 - pinned.length;
- if (remainingNeeded > others.length) {
- alert("Pas assez de jeux dans le pool !");
- return;
+ const generateRun = async () => {
+ if (!isHost) {
+   alert("Seul l'hôte peut générer la run.");
+   return;
  }
- const random = shuffle(others).slice(0, remainingNeeded).map((g) => g.id);
- const run = shuffle([...pinned, ...random]);
- setPendingRun(run);
- setReviewing(true);
+ const pinned = [...state.pinned];
+ // When library-only mode is on, fetch every member's library and shrink the
+ // candidate pool to games every human owns. Pinned games are kept as-is —
+ // they're an explicit override.
+ let candidates = POOL.filter((g) => !pinned.includes(g.id));
+ if (state.libraryOnlyMode) {
+   try {
+     const r = await fetch(`/api/steam/room-libraries/${roomCode}`, { credentials: "include" });
+     if (!r.ok) throw new Error(`HTTP ${r.status}`);
+     const data = await r.json() as { libraries: Record<string, { appIds: number[]; visible: boolean }> };
+     const libs = Object.values(data.libraries).filter((l) => l.visible);
+     if (libs.length === 0) {
+       alert("Bibliothèques Steam privées — impossible de filtrer. Désactive le mode ou rends ta bibliothèque publique.");
+       return;
+     }
+     const ownedSets = libs.map((l) => new Set(l.appIds));
+     candidates = candidates.filter((g) => {
+       if (!g.appid) return false; // library-only mode excludes non-Steam games
+       return ownedSets.every((s) => s.has(g.appid as number));
+     });
+   } catch (e) {
+     console.warn("[generateRun] library fetch failed", e);
+     alert("Impossible de récupérer les bibliothèques Steam.");
+     return;
+   }
+ }
+ const remainingNeeded = 10 - pinned.length;
+ if (remainingNeeded > candidates.length) {
+   alert(
+     state.libraryOnlyMode
+       ? `Seulement ${candidates.length} jeu(x) dans la bibliothèque commune — il en faut ${remainingNeeded}.`
+       : "Pas assez de jeux dans le pool !",
+   );
+   return;
+ }
+ let picks: number[];
+ if (state.leastPlayedMode) {
+   // Sort candidates by ascending play count, with a random tiebreak so two
+   // runs of the same N rarely produce the same first slice. Then take the
+   // top-N least played.
+   let counts: Record<number, number> = {};
+   try {
+     const humanIds = members.filter((m) => !isSyntheticId(m.steamId)).map((m) => m.steamId);
+     if (humanIds.length > 0) {
+       const r = await fetch(`/api/stats/play-counts?steamIds=${humanIds.join(",")}`);
+       if (r.ok) {
+         const data = await r.json() as { counts: Record<number, number> };
+         counts = data.counts ?? {};
+       }
+     }
+   } catch (e) {
+     console.warn("[generateRun] play-counts fetch failed", e);
+   }
+   const weighted = candidates
+     .map((g) => ({ g, plays: counts[g.id] ?? 0, jitter: Math.random() }))
+     .sort((a, b) => a.plays - b.plays || a.jitter - b.jitter);
+   picks = weighted.slice(0, remainingNeeded).map((x) => x.g.id);
+ } else {
+   picks = shuffle(candidates).slice(0, remainingNeeded).map((g) => g.id);
+ }
+ const run = shuffle([...pinned, ...picks]);
+ setState((s) => ({
+   ...s,
+   pendingRun: run,
+   readyPlayers: [],
+   countdownStartedAt: null,
+ }));
  playClick();
  };
 
  const swapInPending = (gameId: number) => {
- if (!pendingRun) return;
- const idx = pendingRun.indexOf(gameId);
+ if (!isHost) return;
+ const pr = state.pendingRun;
+ if (!pr) return;
+ const idx = pr.indexOf(gameId);
  if (idx === -1) return;
- const available = POOL.filter((g) => !pendingRun.includes(g.id));
+ const available = POOL.filter((g) => !pr.includes(g.id));
  if (available.length === 0) {
  alert("Plus aucun jeu disponible dans le pool pour swap.");
  return;
  }
  const newGame = available[Math.floor(Math.random() * available.length)];
- const newRun = [...pendingRun];
+ const newRun = [...pr];
  newRun[idx] = newGame.id;
- setPendingRun(newRun);
+ // Swapping invalidates everyone's ready state — they need to re-confirm.
+ setState((s) => ({ ...s, pendingRun: newRun, readyPlayers: [] }));
  playClick();
  };
 
- const confirmRun = () => {
- if (!pendingRun) return;
- setReviewing(false);
- setCountdown(3);
- // Initialise les power-ups pour chaque membre présent
+ // Toggle the current player's ready state.
+ const toggleReady = () => {
+ if (!me) return;
+ if (!state.pendingRun) return;
+ if (state.countdownStartedAt !== null) return;
+ setState((s) => {
+   const ready = new Set(s.readyPlayers ?? []);
+   if (ready.has(me.steamId)) ready.delete(me.steamId); else ready.add(me.steamId);
+   return { ...s, readyPlayers: Array.from(ready) };
+ });
+ playClick();
+ };
+
+ // Launch the countdown. Triggered manually by the host, or automatically
+ // when every human member is ready.
+ const launchCountdown = () => {
+ if (!state.pendingRun) return;
+ if (state.countdownStartedAt !== null) return;
  const ups: Record<string, { joker: number; shield: number; reroll: number }> = {};
  if (state.powerUpsEnabled !== false) {
    members.forEach((m) => { ups[m.steamId] = { joker: 1, shield: 1, reroll: 1 }; });
  }
- setState((s) => ({ ...s, powerUps: ups, shieldActive: false }));
+ setState((s) => ({
+   ...s,
+   countdownStartedAt: Date.now(),
+   powerUps: ups,
+   shieldActive: false,
+ }));
  playClick();
  };
 
  const cancelReview = () => {
- setPendingRun(null);
- setReviewing(false);
+ if (!isHost) return;
+ setState((s) => ({
+   ...s,
+   pendingRun: null,
+   readyPlayers: [],
+   countdownStartedAt: null,
+ }));
  };
 
  const steamSearchUrl = (name: string) =>
@@ -831,13 +1074,65 @@ function RoomPageInner() {
  };
 
  // === PER-GAME COUNTDOWN (only for games with `timer: true`) ===
- // Sets / clears `state.timerDeadline` which is broadcast to every client in
- // the room — all players see the same countdown.
+ // Now goes through the websocket: the server stamps `timerDeadline` so every
+ // client converges on the same remaining time regardless of clock skew.
  const startTimer = (minutes: number) => {
    const m = Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, 120) : 5;
-   setState((s) => ({ ...s, timerDeadline: Date.now() + Math.round(m * 60_000) }));
+   socketStartTimer(m);
  };
- const resetTimer = () => setState((s) => ({ ...s, timerDeadline: null }));
+ const resetTimer = () => socketClearTimer();
+
+ // === VERSUS — auto-assigns humans into red/blue teams, alternating ===
+ const assignVersusTeams = () => {
+   if (!isHost) return;
+   const humans = members.filter((m) => !isSyntheticId(m.steamId));
+   const shuffled = shuffle(humans);
+   const teams: Record<string, "red" | "blue"> = {};
+   shuffled.forEach((m, i) => { teams[m.steamId] = i % 2 === 0 ? "red" : "blue"; });
+   setState((s) => ({ ...s, versusMode: true, teams, gameWinners: {} }));
+   playClick();
+ };
+
+ // Toggle a single player's team — host can rebalance manually.
+ const togglePlayerTeam = (steamId: string) => {
+   if (!isHost) return;
+   setState((s) => {
+     const current = s.teams[steamId];
+     const next = current === "red" ? "blue" : "red";
+     return { ...s, teams: { ...s.teams, [steamId]: next } };
+   });
+ };
+
+ // Versus score derived from gameWinners.
+ const versusScore = (() => {
+   let red = 0, blue = 0;
+   for (const t of Object.values(state.gameWinners)) {
+     if (t === "red") red++; else if (t === "blue") blue++;
+   }
+   return { red, blue };
+ })();
+
+ // === VERSUS — one team scores the current game ===
+ const winVersusGame = (gameId: number, team: "red" | "blue") => {
+   setState((s) => {
+     if (s.done.includes(gameId)) return s;
+     const newDone = [...s.done, gameId];
+     const newCurrent = s.current + 1;
+     const winners = { ...s.gameWinners, [gameId]: team };
+     let next: GauntletState = {
+       ...s,
+       done: newDone,
+       current: newCurrent,
+       gameWinners: winners,
+       timerDeadline: null,
+     };
+     if (newDone.length === s.run.length) {
+       next = { ...next, history: logRunToHistory({ ...next }, "win") };
+     }
+     return next;
+   });
+   playClick();
+ };
 
  // === WIN / LOSE ===
  const winGame = (gameId: number) => {
@@ -1093,6 +1388,51 @@ function RoomPageInner() {
               </span>
             )}
           </div>
+          {state.versusMode && (
+            <div className="vs-scoreboard" aria-label="Score Versus">
+              <div className="vs-team vs-team-red">
+                <div className="vs-team-label">Équipe Rouge</div>
+                <div className="vs-team-score">{versusScore.red}</div>
+                <div className="vs-team-roster">
+                  {members
+                    .filter((m) => state.teams[m.steamId] === "red")
+                    .map((m) => (
+                      <span
+                        key={m.steamId}
+                        className="vs-roster-chip"
+                        title={isHost ? "Cliquer pour changer d'équipe" : m.displayName}
+                        onClick={isHost ? () => togglePlayerTeam(m.steamId) : undefined}
+                        role={isHost ? "button" : undefined}
+                      >
+                        <img src={m.avatarUrl} alt="" />
+                        <span>{m.displayName}</span>
+                      </span>
+                    ))}
+                </div>
+              </div>
+              <div className="vs-separator">VS</div>
+              <div className="vs-team vs-team-blue">
+                <div className="vs-team-label">Équipe Bleue</div>
+                <div className="vs-team-score">{versusScore.blue}</div>
+                <div className="vs-team-roster">
+                  {members
+                    .filter((m) => state.teams[m.steamId] === "blue")
+                    .map((m) => (
+                      <span
+                        key={m.steamId}
+                        className="vs-roster-chip"
+                        title={isHost ? "Cliquer pour changer d'équipe" : m.displayName}
+                        onClick={isHost ? () => togglePlayerTeam(m.steamId) : undefined}
+                        role={isHost ? "button" : undefined}
+                      >
+                        <img src={m.avatarUrl} alt="" />
+                        <span>{m.displayName}</span>
+                      </span>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
  </div>
 
  {/* CONFIG — hidden once a run is generated. Reopens after Reset complet. */}
@@ -1234,6 +1574,80 @@ function RoomPageInner() {
  </button>
  </div>
  </div>
+
+ <div className="field"style={{ marginTop: 18 }}>
+ <label>Bibliothèque Steam uniquement</label>
+ <div className="toggle-group">
+ <button
+   className={`toggle ${!state.libraryOnlyMode ? "active" : ""}`}
+   onClick={() => update({ libraryOnlyMode: false })}
+   disabled={runLocked || !isHost}
+ >
+   Tout le pool
+ </button>
+ <button
+   className={`toggle ${state.libraryOnlyMode ? "active" : ""}`}
+   onClick={() => update({ libraryOnlyMode: true })}
+   disabled={runLocked || !isHost}
+   title="Ne tirer que des jeux que tous les joueurs ont dans leur bibliothèque Steam"
+ >
+   Bibliothèque commune
+ </button>
+ </div>
+ <p className="field-hint">
+   Quand activé, seuls les jeux Steam que <strong>tous les membres</strong> possèdent sont tirés au sort.
+ </p>
+ </div>
+
+ <div className="field"style={{ marginTop: 18 }}>
+ <label>Mode de tirage</label>
+ <div className="toggle-group">
+ <button
+   className={`toggle ${!state.leastPlayedMode ? "active" : ""}`}
+   onClick={() => update({ leastPlayedMode: false })}
+   disabled={runLocked || !isHost}
+ >
+   Aléatoire
+ </button>
+ <button
+   className={`toggle ${state.leastPlayedMode ? "active" : ""}`}
+   onClick={() => update({ leastPlayedMode: true })}
+   disabled={runLocked || !isHost}
+   title="Force les jeux que vous avez le moins joués dans vos précédentes runs"
+ >
+   Moins joués
+ </button>
+ </div>
+ <p className="field-hint">
+   Force les jeux que les membres ont <strong>le moins joués</strong> dans leur historique.
+ </p>
+ </div>
+
+ <div className="field"style={{ marginTop: 18 }}>
+ <label>Mode VS (versus)</label>
+ <div className="toggle-group">
+ <button
+   className={`toggle ${!state.versusMode ? "active" : ""}`}
+   onClick={() => update({ versusMode: false, teams: {}, gameWinners: {} })}
+   disabled={runLocked || !isHost}
+ >
+   Coopératif
+ </button>
+ <button
+   className={`toggle vs-toggle ${state.versusMode ? "active" : ""}`}
+   onClick={() => assignVersusTeams()}
+   disabled={runLocked || !isHost}
+   title="Deux équipes s'affrontent — Rouge vs Bleue"
+ >
+   Rouge vs Bleue
+ </button>
+ </div>
+ {state.versusMode && (
+   <p className="field-hint">
+     Chaque jeu est gagné par <strong>une seule équipe</strong>. À la fin, l'équipe avec le plus de victoires l'emporte.
+   </p>
+ )}
+ </div>
  </div>
 
  {/* POOL */}
@@ -1313,13 +1727,28 @@ function RoomPageInner() {
  })}
  </div>
  <div className="generate-row">
- <button className="btn btn-large btn-start"onClick={generateRun}>
+ <button
+   className="btn btn-large btn-start"
+   onClick={generateRun}
+   disabled={!isHost}
+   title={!isHost ? "Seul l'hôte peut générer la run" : undefined}
+ >
  {state.run.length > 0 ? <><Icon name="sparkles" /> Régénérer une nouvelle run</> : <><Icon name="sparkles" /> Générer la run (10 jeux)</>}
  </button>
- <button className="btn btn-large btn-reroll"onClick={rerollRun} disabled={state.run.length === 0}>
+ <button
+   className="btn btn-large btn-reroll"
+   onClick={rerollRun}
+   disabled={state.run.length === 0 || !isHost}
+   title={!isHost ? "Seul l'hôte peut re-roll" : undefined}
+ >
  <><Icon name="refresh" /> Re-roll les jeux aléatoires</>
  </button>
  </div>
+ {!isHost && (
+   <div className="host-only-hint">
+     <Icon name="info" size={12} /> Seul l'hôte peut générer ou re-roll la run.
+   </div>
+ )}
  </div>
  </>
  )}
@@ -1482,6 +1911,15 @@ function RoomPageInner() {
  <div className={`game-objective ${state.difficulty === "hardcore" ? "hc" : ""}`}>
  Objectif : <strong>{objective}</strong>
  </div>
+ {g.achievement && g.appid && isCurrent && !isDone && (
+   <AchievementCheck
+     gameId={gameId}
+     appid={g.appid}
+     apiname={g.achievement.apiname}
+     label={g.achievement.label}
+     onUnlocked={() => (state.versusMode ? null : winGame(gameId))}
+   />
+ )}
  {g.appid && members.some((m) => !isSyntheticId(m.steamId)) && (
  <div className="game-owners" aria-label="Possession Steam">
  {members.filter((m) => !isSyntheticId(m.steamId)).map((m) => {
@@ -1544,11 +1982,15 @@ function RoomPageInner() {
  {betweenPairs && <div className="slot-sep slot-sep-pair" aria-hidden="true">·</div>}
  <div className="slot-reel">
  <div className="slot-strip" id={`strip${r}`}>
- {cells.map((c, ci) => (
+ {cells.map((c, ci) => {
+ const av = nameToAvatar[c];
+ return (
  <div className="slot-cell" key={ci}>
- {c}
+ {av && <img className="slot-avatar" src={av} alt="" />}
+ <span className="slot-name">{c}</span>
  </div>
- ))}
+ );
+ })}
  </div>
  </div>
  </React.Fragment>
@@ -1559,9 +2001,9 @@ function RoomPageInner() {
  );
  })() : champion ? (
  effMode === "duo" ? (
- <>{champion.includes(" · ") ? "Duos désignés" : "Duo désigné"} : <span className="name">{champion}</span></>
+ <>{champion.includes(" · ") ? "Duos désignés" : "Duo désigné"} : <ChampionName text={champion} nameToAvatar={nameToAvatar} /></>
 ) : (
- <>Champion désigné : <span className="name">{champion}</span></>
+ <>Champion désigné : <ChampionName text={champion} nameToAvatar={nameToAvatar} /></>
  )
 ) : effMode === "duo" ? (
  <>Aucun duo tiré — <em>Tirage au sort requis</em></>
@@ -1649,12 +2091,35 @@ function RoomPageInner() {
  Tirer
  </button>
  )}
+ {state.versusMode ? (
+ <>
+ <button
+   className="btn btn-win btn-vs-red"
+   disabled={!isCurrent}
+   onClick={() => winVersusGame(gameId, "red")}
+   title="Équipe Rouge gagne ce jeu"
+ >
+   Rouge gagne
+ </button>
+ <button
+   className="btn btn-win btn-vs-blue"
+   disabled={!isCurrent}
+   onClick={() => winVersusGame(gameId, "blue")}
+   title="Équipe Bleue gagne ce jeu"
+ >
+   Bleue gagne
+ </button>
+ </>
+ ) : (
+ <>
  <button className="btn btn-win"disabled={!isCurrent} onClick={() => winGame(gameId)}>
  Validé
  </button>
  <button className="btn btn-lose"disabled={!isCurrent} onClick={() => loseGame(gameId)}>
  Échoué
  </button>
+ </>
+ )}
  </>
  )}
  </div>
@@ -1888,18 +2353,63 @@ function RoomPageInner() {
  <a href={steamSearchUrl(g.name)} target="_blank" rel="noopener noreferrer" className="btn btn-steam" title="Ouvrir Steam pour télécharger">
  Steam
  </a>
- <button className="btn btn-swap" onClick={() => swapInPending(id)}>
- <Icon name="refresh" /> Remplacer
- </button>
+ {isHost && (
+   <button className="btn btn-swap" onClick={() => swapInPending(id)}>
+     <Icon name="refresh" /> Remplacer
+   </button>
+ )}
  </div>
  );
  })}
  </div>
+ {/* Ready-states roster — one chip per human member. */}
+ {(() => {
+   const humans = members.filter((m) => !isSyntheticId(m.steamId));
+   if (humans.length === 0) return null;
+   const ready = new Set(state.readyPlayers ?? []);
+   const readyCount = humans.filter((m) => ready.has(m.steamId)).length;
+   return (
+     <div className="ready-roster">
+       <div className="ready-roster-title">
+         Prêts : <strong>{readyCount}/{humans.length}</strong>
+       </div>
+       <div className="ready-chips">
+         {humans.map((m) => {
+           const isReady = ready.has(m.steamId);
+           return (
+             <span key={m.steamId} className={`ready-chip ${isReady ? "ready" : "waiting"}`}>
+               <img src={m.avatarUrl} alt="" />
+               <span className="ready-chip-name">{m.displayName}</span>
+               <span className="ready-chip-status" aria-hidden="true">{isReady ? "✓" : "…"}</span>
+             </span>
+           );
+         })}
+       </div>
+     </div>
+   );
+ })()}
  <div className="review-actions">
- <button className="btn btn-large btn-reset" onClick={cancelReview}>Annuler</button>
- <button className="btn btn-large btn-start" onClick={confirmRun}>
- <Icon name="sparkles" /> Tout est prêt — Lancer
- </button>
+   {isHost && (
+     <button className="btn btn-large btn-reset" onClick={cancelReview}>Annuler</button>
+   )}
+   {me && !isSyntheticId(me.steamId) && (
+     (() => {
+       const isReady = (state.readyPlayers ?? []).includes(me.steamId);
+       return (
+         <button
+           className={`btn btn-large ${isReady ? "btn-reset" : "btn-start"}`}
+           onClick={toggleReady}
+         >
+           {isReady ? (<><Icon name="x" /> Pas prêt</>) : (<><Icon name="check" /> Je suis prêt</>)}
+         </button>
+       );
+     })()
+   )}
+   {isHost && (
+     <button className="btn btn-large btn-start" onClick={launchCountdown} title="Forcer le départ sans attendre tout le monde">
+       <Icon name="sparkles" /> Lancer maintenant
+     </button>
+   )}
  </div>
  </div>
  </div>

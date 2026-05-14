@@ -25,5 +25,5 @@ export interface RoomSnapshot {
  */
 export type RoomEvent =
   | { type: "state"; state: GauntletState }
-  | { type: "members"; members: RoomMember[] }
+  | { type: "members"; members: RoomMember[]; ownerSteamId?: string }
   | { type: "closed"; reason?: string };

@@ -529,6 +529,30 @@ export function getLeaderboards(): LeaderboardsPayload {
  * clearance/failure rates therefore can't be derived from `run_games` alone —
  * we cross-reference `runs.failed_game_id` to count true failures.
  */
+/**
+ * Per-game appearance counts restricted to runs involving any of the given
+ * Steam IDs. Used by the "least played" mode to bias selection toward games
+ * the current room has played the least. Returns a map keyed by game_id.
+ */
+export function getGamePlayCountsForPlayers(steamIds: string[]): Record<number, number> {
+  const ids = steamIds.filter((s) => /^\d{17}$/.test(s));
+  if (ids.length === 0) return {};
+  const db = getDb();
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db
+    .prepare(
+      `SELECT rg.game_id AS gameId, COUNT(DISTINCT rg.run_id) AS plays
+         FROM run_games rg
+         JOIN run_players rp ON rp.run_id = rg.run_id
+        WHERE rp.steam_id IN (${placeholders})
+        GROUP BY rg.game_id`,
+    )
+    .all(...ids) as Array<{ gameId: number; plays: number }>;
+  const out: Record<number, number> = {};
+  for (const r of rows) out[r.gameId] = r.plays;
+  return out;
+}
+
 export function getGameStats(): GameStatsPayload {
   const db = getDb();
 

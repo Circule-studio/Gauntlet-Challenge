@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gauntlet Timer</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="hdr">
+      <h1>Gauntlet Timer</h1>
+      <span id="status" class="status" data-state="idle">●</span>
+    </header>
+
+    <section id="timer-section" class="timer-section">
+      <div class="timer-label" id="timer-label">Aucun timer</div>
+      <div class="timer-clock" id="timer-clock">--:--</div>
+      <div class="game-name" id="game-name"></div>
+    </section>
+
+    <section class="config">
+      <details id="config-details">
+        <summary>Configuration</summary>
+        <label class="field">
+          <span>URL du serveur</span>
+          <input type="url" id="server-url" placeholder="https://gauntlet.example.com" />
+        </label>
+        <label class="field">
+          <span>Code de room (publique)</span>
+          <input type="text" id="room-code" placeholder="ABCDEF" maxlength="8" />
+        </label>
+        <label class="field">
+          <span>OU jeton overlay (perso)</span>
+          <input type="text" id="overlay-token" placeholder="jeton de /api/me/overlay-token" />
+        </label>
+        <button id="save-btn" class="btn-primary">Enregistrer & connecter</button>
+        <button id="disconnect-btn" class="btn-secondary">Déconnecter</button>
+        <p class="hint">
+          Renseigne soit un <strong>code de room</strong>, soit un <strong>jeton personnel</strong> (obtenu depuis « Overlays » dans la room). Le jeton permet de suivre automatiquement la room courante.
+        </p>
+      </details>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

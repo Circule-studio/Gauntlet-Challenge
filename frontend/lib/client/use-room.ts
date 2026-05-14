@@ -9,15 +9,19 @@ export interface UseRoomResult {
   state: GauntletState;
   setState: React.Dispatch<React.SetStateAction<GauntletState>>;
   members: RoomMember[];
+  ownerSteamId: string | null;
   connected: boolean;
   closed: string | null;
   addBot: (name: string) => void;
   removeBot: (botSteamId: string) => void;
+  startTimer: (minutes: number) => void;
+  clearTimer: () => void;
 }
 
 export function useRoom(code: string): UseRoomResult {
   const [state, setLocalState] = useState<GauntletState>(DEFAULT_STATE);
   const [members, setMembers] = useState<RoomMember[]>([]);
+  const [ownerSteamId, setOwnerSteamId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [closed, setClosed] = useState<string | null>(null);
 
@@ -68,6 +72,7 @@ export function useRoom(code: string): UseRoomResult {
 
     socket.on("members", (event: Extract<RoomEvent, { type: "members" }>) => {
       setMembers(event.members);
+      if (event.ownerSteamId !== undefined) setOwnerSteamId(event.ownerSteamId);
     });
 
     socket.on("closed", (event: Extract<RoomEvent, { type: "closed" }>) => {
@@ -126,5 +131,13 @@ export function useRoom(code: string): UseRoomResult {
     socketRef.current?.emit("remove_bot", { botSteamId });
   }, []);
 
-  return { state, setState, members, connected, closed, addBot, removeBot };
+  const startTimer = useCallback((minutes: number) => {
+    socketRef.current?.emit("start_timer", { minutes });
+  }, []);
+
+  const clearTimer = useCallback(() => {
+    socketRef.current?.emit("clear_timer");
+  }, []);
+
+  return { state, setState, members, ownerSteamId, connected, closed, addBot, removeBot, startTimer, clearTimer };
 }

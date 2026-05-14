@@ -207,7 +207,7 @@ export function findUserRoomCode(steamId: string): string | null {
 export function broadcastMembersForUser(steamId: string): void {
   rooms.forEach((r) => {
     if (!r.members.has(steamId)) return;
-    broadcast(r, { type: "members", members: snapshotMembers(r) });
+    broadcast(r, { type: "members", members: snapshotMembers(r), ownerSteamId: r.ownerSteamId });
   });
 }
 
@@ -269,7 +269,7 @@ export function addBot(
   };
   r.members.set(botId, bot);
   touch(r);
-  broadcast(r, { type: "members", members: snapshotMembers(r) });
+  broadcast(r, { type: "members", members: snapshotMembers(r), ownerSteamId: r.ownerSteamId });
   return { bot };
 }
 
@@ -288,7 +288,7 @@ export function removeBot(
   if (!isBotId(botSteamId)) return { error: "Cible non bot" };
   if (!r.members.delete(botSteamId)) return { error: "Bot introuvable" };
   touch(r);
-  broadcast(r, { type: "members", members: snapshotMembers(r) });
+  broadcast(r, { type: "members", members: snapshotMembers(r), ownerSteamId: r.ownerSteamId });
   return { ok: true };
 }
 
@@ -359,7 +359,7 @@ export function joinRoom(code: string, user: SteamSessionUser): RoomSnapshot | {
   const member: RoomMember = { ...user, joinedAt: r.members.get(user.steamId)?.joinedAt ?? Date.now() };
   r.members.set(user.steamId, member);
   touch(r);
-  broadcast(r, { type: "members", members: snapshotMembers(r) });
+  broadcast(r, { type: "members", members: snapshotMembers(r), ownerSteamId: r.ownerSteamId });
   refreshUserOverlaySubs(user.steamId);
   return snapshot(r);
 }
@@ -411,7 +411,7 @@ function removeMember(code: string, steamId: string, deleteIfEmpty: boolean): bo
     if (nextHuman) r.ownerSteamId = nextHuman.steamId;
   }
   touch(r);
-  broadcast(r, { type: "members", members: snapshotMembers(r) });
+  broadcast(r, { type: "members", members: snapshotMembers(r), ownerSteamId: r.ownerSteamId });
   refreshUserOverlaySubs(steamId);
   return true;
 }
@@ -547,6 +547,37 @@ export function mutateState(
   const r = rooms.get(code.toUpperCase());
   if (!r) return { error: "Room introuvable" };
   if (!r.members.has(steamId)) return { error: "Pas membre de cette room" };
+  return applyMutation(r, next);
+}
+
+/**
+ * Server-authoritative timer start. Stamps `timerDeadline` with the server's
+ * clock so all clients agree on the exact remaining time regardless of their
+ * own clock skew. `minutes` is clamped to [1, 120].
+ */
+export function setTimer(
+  code: string,
+  steamId: string,
+  minutes: number,
+): RoomSnapshot | { error: string } {
+  const r = rooms.get(code.toUpperCase());
+  if (!r) return { error: "Room introuvable" };
+  if (!r.members.has(steamId)) return { error: "Pas membre de cette room" };
+  const m = Math.max(1, Math.min(120, Math.round(minutes)));
+  const deadline = Date.now() + m * 60_000;
+  const next = { ...r.state, timerDeadline: deadline };
+  return applyMutation(r, next);
+}
+
+export function clearTimer(
+  code: string,
+  steamId: string,
+): RoomSnapshot | { error: string } {
+  const r = rooms.get(code.toUpperCase());
+  if (!r) return { error: "Room introuvable" };
+  if (!r.members.has(steamId)) return { error: "Pas membre de cette room" };
+  if (r.state.timerDeadline === null) return snapshot(r);
+  const next = { ...r.state, timerDeadline: null };
   return applyMutation(r, next);
 }
 

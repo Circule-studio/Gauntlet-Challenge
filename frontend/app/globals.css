@@ -196,6 +196,8 @@ html, body {
 }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
+.field-hint { font-size: 11px; color: var(--muted); margin: 2px 0 0; }
+.field-hint strong { color: var(--text); }
 .field label {
   font-size: 11px;
   text-transform: none;
@@ -1641,7 +1643,202 @@ html, body {
   padding: 0 6px;
   white-space: nowrap;
   text-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
+.slot-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.slot-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.champion-name-with-avatars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.champion-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.champion-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.champion-sep {
+  white-space: pre;
+  opacity: 0.7;
+}
+.host-only-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+.ready-roster {
+  margin: 12px 0 16px;
+  padding: 10px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.ready-roster-title {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.ready-roster-title strong { color: var(--text); }
+.ready-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ready-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  background: var(--bg-0);
+}
+.ready-chip img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.ready-chip-status {
+  font-weight: 700;
+  margin-left: 2px;
+}
+.ready-chip.ready {
+  border-color: var(--good, #4ade80);
+  color: var(--good, #4ade80);
+}
+.ready-chip.ready .ready-chip-name { color: var(--text); }
+.ready-chip.waiting {
+  opacity: 0.7;
+}
+.vs-scoreboard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  margin: 16px auto 0;
+  padding: 12px 18px;
+  max-width: 720px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-1);
+}
+.vs-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.vs-team-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.vs-team-score {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+}
+.vs-team-red .vs-team-label, .vs-team-red .vs-team-score { color: #ef4444; }
+.vs-team-blue .vs-team-label, .vs-team-blue .vs-team-score { color: #3b82f6; }
+.vs-separator {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+}
+.vs-team-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
+}
+.vs-roster-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 2px;
+  border-radius: 999px;
+  background: var(--bg-0);
+  font-size: 11px;
+  border: 1px solid var(--line);
+  cursor: default;
+}
+.vs-roster-chip[role="button"] { cursor: pointer; }
+.vs-roster-chip img {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.btn-vs-red {
+  background: #ef4444 !important;
+  color: white;
+}
+.btn-vs-blue {
+  background: #3b82f6 !important;
+  color: white;
+}
+.vs-toggle.active {
+  background: linear-gradient(90deg, #ef4444 0%, #ef4444 49%, #3b82f6 51%, #3b82f6 100%) !important;
+  color: white !important;
+}
+.achievement-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.achievement-check.status-unlocked {
+  border-color: var(--good, #4ade80);
+  background: rgba(74, 222, 128, 0.08);
+}
+.achievement-check.status-private {
+  border-color: var(--warn, #f59e0b);
+  background: rgba(245, 158, 11, 0.08);
+}
+.achievement-label { flex: 1; }
+.btn-achievement {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.btn-achievement:disabled { opacity: 0.6; cursor: default; }
 .slot-machine.locked .slot-strip { animation: none; }
 .slot-sep {
   flex-shrink: 0;

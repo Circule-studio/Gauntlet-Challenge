@@ -16,6 +16,16 @@ export interface Game {
   /** True for games whose objective is timed — surfaces a player-set countdown
    *  on the current game tile, synced across all clients in the room. */
   timer?: boolean;
+  /** Optional Steam achievement-based objective. When present, the game tile
+   *  exposes a "Vérifier succès" button that hits Steam and auto-completes the
+   *  game when the achievement is unlocked. Requires `appid` to be set. */
+  achievement?: {
+    /** Internal API name of the achievement (the SDK identifier). */
+    apiname: string;
+    /** Optional display label override. Defaults to the achievement's display
+     *  name returned by Steam. */
+    label?: string;
+  };
 }
 
 export type Difficulty = "normal" | "hardcore";
@@ -81,6 +91,18 @@ export interface GauntletState {
     startedAt: number;
     initiator: string;
   } | null;
+  // Run-in-preparation: the 10 game IDs the host has generated, broadcast so
+  // every member sees the same review modal. Null when no run is being
+  // prepared. Cleared on cancel or when the countdown finishes and `run` is
+  // committed.
+  pendingRun: number[] | null;
+  // Steam IDs of members who have clicked "Ready" in the preparation modal.
+  // Reset every time `pendingRun` is set.
+  readyPlayers: string[];
+  // Set by the host (or auto when everyone is ready) to start the synced
+  // 3-2-1-GO countdown. Absolute ms epoch when the countdown started; every
+  // client derives the current digit from `now - countdownStartedAt`.
+  countdownStartedAt: number | null;
   runFails: Record<number, number>;
   history: RunHistoryEntry[];
   steamLinks: Record<number, SteamLink>;
@@ -95,6 +117,19 @@ export interface GauntletState {
   // over `ownership` for the UI. Used to override Steam when the API can't
   // see a private library or the user just wants to assert ownership.
   ownershipOverride: Record<string, Record<string, boolean>>;
+  // When true, generateRun only picks Steam-backed games (with an appid) that
+  // every human member of the room owns. Synced so all members see the same
+  // toggle state in the config panel.
+  libraryOnlyMode: boolean;
+  // When true, generateRun deterministically picks the games this room has
+  // played the least often (with random tiebreak) instead of pure random.
+  leastPlayedMode: boolean;
+  // Versus mode — splits the room into two opposing teams ("red"/"blue") and
+  // tracks per-game wins instead of cooperative defeat. The team with the
+  // most won games at the end of the run wins the gauntlet.
+  versusMode: boolean;
+  teams: Record<string, "red" | "blue">; // steamId → team
+  gameWinners: Record<number, "red" | "blue">; // gameId → winning team
 }
 
 export const DEFAULT_STATE: GauntletState = {
@@ -115,6 +150,9 @@ export const DEFAULT_STATE: GauntletState = {
   runStartTime: null,
   timerDeadline: null,
   drawing: null,
+  pendingRun: null,
+  readyPlayers: [],
+  countdownStartedAt: null,
   runFails: {},
   history: [],
   steamLinks: {},
@@ -123,4 +161,9 @@ export const DEFAULT_STATE: GauntletState = {
   powerUpsEnabled: true,
   ownership: {},
   ownershipOverride: {},
+  libraryOnlyMode: false,
+  leastPlayedMode: false,
+  versusMode: false,
+  teams: {},
+  gameWinners: {},
 };

@@ -20,6 +20,7 @@ const NOROOM_PLACEHOLDER: OverlayState = {
   currentGameStartedAt: null,
   currentGameElapsed: 0,
   games: [],
+  timerDeadline: null,
 };
 
 function setSseHeaders(res: Response): void {

@@ -33,6 +33,7 @@ interface Game {
   appid?: number;
   cover?: string;
   timer?: boolean;
+  achievement?: { apiname: string; label?: string };
 }
 
 class HttpError extends Error {
@@ -97,6 +98,15 @@ function validateGames(input: unknown): Game[] {
     }
     if (typeof raw.cover === "string" && raw.cover.trim()) g.cover = raw.cover.trim();
     if (raw.timer === true) g.timer = true;
+    const ach = raw.achievement;
+    if (ach && typeof ach === "object") {
+      const apiname = (ach as Record<string, unknown>).apiname;
+      const label = (ach as Record<string, unknown>).label;
+      if (typeof apiname === "string" && apiname.trim()) {
+        g.achievement = { apiname: apiname.trim() };
+        if (typeof label === "string" && label.trim()) g.achievement.label = label.trim();
+      }
+    }
     out.push(g);
   }
   return out;
@@ -117,6 +127,13 @@ function serializeGames(games: Game[]): string {
     if (g.appid) parts.push(`appid: ${g.appid}`);
     if (g.cover) parts.push(`cover: ${JSON.stringify(g.cover)}`);
     if (g.timer) parts.push(`timer: true`);
+    if (g.achievement) {
+      const a = g.achievement;
+      const ach = a.label
+        ? `{ apiname: ${JSON.stringify(a.apiname)}, label: ${JSON.stringify(a.label)} }`
+        : `{ apiname: ${JSON.stringify(a.apiname)} }`;
+      parts.push(`achievement: ${ach}`);
+    }
     return ` { ${parts.join(", ")} },`;
   });
   return [

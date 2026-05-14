@@ -5,6 +5,9 @@ import { requireAuth } from "../middleware/auth";
 import { HttpError } from "../lib/auth";
 import { resolveOwnership } from "../lib/ownership";
 import { rateLimit } from "../lib/rate-limit";
+import { getRoom } from "../lib/room-store";
+import { getOwnedGames, getPlayerAchievements } from "../lib/steam-api";
+import { isSyntheticId } from "@shared/types/steam";
 import type { OwnershipResult } from "@shared/types/steam";
 
 const router = Router();
@@ -84,6 +87,83 @@ router.get("/owns/:appId", requireAuth, async (req, res) => {
       return;
     }
     res.json(result);
+  } catch (e) {
+    sendError(res, e);
+  }
+});
+
+// GET /api/steam/room-libraries/:code
+// Returns the Steam library appIds for every human member of the room. The
+// requester must themselves be a human member of that room. Used by the
+// "Steam library only" mode so the host can intersect everyone's libraries
+// and pick games only from games owned by everyone.
+router.get("/room-libraries/:code", requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const code = String(req.params.code ?? "").toUpperCase();
+    if (!/^[A-Z0-9]{4,8}$/.test(code)) {
+      res.status(400).json({ error: "Invalid room code" });
+      return;
+    }
+    const room = getRoom(code);
+    if (!room) {
+      res.status(404).json({ error: "Room introuvable" });
+      return;
+    }
+    if (!room.members.some((m) => m.steamId === user.steamId)) {
+      res.status(403).json({ error: "Pas membre de cette room" });
+      return;
+    }
+
+    const libraries: Record<string, { appIds: number[]; visible: boolean }> = {};
+    const humans = room.members.filter((m) => !isSyntheticId(m.steamId));
+    await Promise.all(
+      humans.map(async (m) => {
+        try {
+          const games = await getOwnedGames(m.steamId);
+          libraries[m.steamId] = {
+            appIds: games.map((g) => g.appid),
+            visible: games.length > 0,
+          };
+        } catch {
+          libraries[m.steamId] = { appIds: [], visible: false };
+        }
+      }),
+    );
+
+    res.json({ code, libraries });
+  } catch (e) {
+    sendError(res, e);
+  }
+});
+
+// GET /api/steam/achievement/:appid/:apiname
+// Returns the requester's unlock state for a single achievement on a single
+// app. Used by the achievement-based game objective.
+router.get("/achievement/:appid/:apiname", requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const appid = Number(req.params.appid);
+    const apiname = String(req.params.apiname ?? "").trim();
+    if (!Number.isFinite(appid) || appid <= 0) {
+      res.status(400).json({ error: "Invalid appid" });
+      return;
+    }
+    if (!apiname || apiname.length > 200) {
+      res.status(400).json({ error: "Invalid apiname" });
+      return;
+    }
+    const list = await getPlayerAchievements(user.steamId, appid);
+    const match = list.find((a) => a.apiname === apiname);
+    if (!match) {
+      res.json({ unlocked: false, unlocktime: null, known: false });
+      return;
+    }
+    res.json({
+      unlocked: match.achieved === 1,
+      unlocktime: match.unlocktime > 0 ? match.unlocktime : null,
+      known: true,
+    });
   } catch (e) {
     sendError(res, e);
   }

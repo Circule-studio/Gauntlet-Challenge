@@ -15,6 +15,8 @@ interface DraftGame {
   appid: number | "";
   cover: string;
   timer: boolean;
+  achievementApiname: string;
+  achievementLabel: string;
 }
 
 const EMPTY_DRAFT: DraftGame = {
@@ -28,6 +30,8 @@ const EMPTY_DRAFT: DraftGame = {
   appid: "",
   cover: "",
   timer: false,
+  achievementApiname: "",
+  achievementLabel: "",
 };
 
 function gameToDraft(g: Game): DraftGame {
@@ -42,6 +46,8 @@ function gameToDraft(g: Game): DraftGame {
     appid: g.appid ?? "",
     cover: g.cover ?? "",
     timer: g.timer ?? false,
+    achievementApiname: g.achievement?.apiname ?? "",
+    achievementLabel: g.achievement?.label ?? "",
   };
 }
 
@@ -59,6 +65,10 @@ function draftToGame(d: DraftGame): Game {
   if (d.appid !== "" && Number.isInteger(Number(d.appid))) g.appid = Number(d.appid);
   if (d.cover.trim()) g.cover = d.cover.trim();
   if (d.timer) g.timer = true;
+  if (d.achievementApiname.trim()) {
+    g.achievement = { apiname: d.achievementApiname.trim() };
+    if (d.achievementLabel.trim()) g.achievement.label = d.achievementLabel.trim();
+  }
   return g;
 }
 
@@ -421,6 +431,27 @@ export default function AdminGamesPage() {
                   />
                   A un compte à rebours
                 </label>
+              </div>
+
+              <div className="ge-grid">
+                <Field label="Succès Steam — API name (optionnel)">
+                  <input
+                    type="text"
+                    className="ge-input"
+                    value={draft.achievementApiname}
+                    onChange={(e) => setDraft({ ...draft, achievementApiname: e.target.value })}
+                    placeholder="ex. ACH_BEAT_BOSS_1"
+                  />
+                </Field>
+                <Field label="Succès — Libellé affiché (optionnel)">
+                  <input
+                    type="text"
+                    className="ge-input"
+                    value={draft.achievementLabel}
+                    onChange={(e) => setDraft({ ...draft, achievementLabel: e.target.value })}
+                    placeholder="ex. Battre le premier boss"
+                  />
+                </Field>
               </div>
 
               <div className="ge-editor-actions">

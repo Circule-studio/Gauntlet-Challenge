@@ -11,6 +11,8 @@ import {
   cancelPendingLeave,
   addBot,
   removeBot,
+  setTimer,
+  clearTimer,
 } from "./lib/room-store";
 import { verifyToken } from "./lib/verify-token";
 import { SESSION_COOKIE } from "@shared/session-cookie";
@@ -114,7 +116,7 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
       unsub = result.unsubscribe;
 
       socket.emit("state",   { type: "state",   state:   result.snapshot.state });
-      socket.emit("members", { type: "members", members: result.snapshot.members });
+      socket.emit("members", { type: "members", members: result.snapshot.members, ownerSteamId: result.snapshot.ownerSteamId });
     });
 
     socket.on("mutate", ({ state }: { state: GauntletState }) => {
@@ -137,6 +139,29 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
     socket.on("remove_bot", ({ botSteamId }: { botSteamId?: string }) => {
       if (!currentCode || typeof botSteamId !== "string") return;
       const result = removeBot(currentCode, user.steamId, botSteamId);
+      if ("error" in result) {
+        socket.emit("room_error", { message: result.error });
+      }
+    });
+
+    // Server-authoritative per-game timer. The server stamps the deadline so
+    // clients with skewed clocks all converge on the same remaining time.
+    socket.on("start_timer", ({ minutes }: { minutes?: number }) => {
+      if (!currentCode) return;
+      const m = Number(minutes);
+      if (!Number.isFinite(m) || m <= 0) {
+        socket.emit("room_error", { message: "Durée timer invalide" });
+        return;
+      }
+      const result = setTimer(currentCode, user.steamId, m);
+      if ("error" in result) {
+        socket.emit("room_error", { message: result.error });
+      }
+    });
+
+    socket.on("clear_timer", () => {
+      if (!currentCode) return;
+      const result = clearTimer(currentCode, user.steamId);
       if ("error" in result) {
         socket.emit("room_error", { message: result.error });
       }

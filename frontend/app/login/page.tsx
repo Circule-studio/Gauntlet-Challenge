@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 
 type Status = "ok" | "cancelled" | "invalid" | null;
 
+const ROOM_CODE_RE = /^[A-Z0-9]{4,8}$/;
+function readNext(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URL(window.location.href).searchParams.get("next");
+  if (!raw) return null;
+  const code = raw.toUpperCase();
+  return ROOM_CODE_RE.test(code) ? code : null;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status>(null);
@@ -12,12 +21,21 @@ export default function LoginPage() {
   const [guestName, setGuestName] = useState("");
   const [guestBusy, setGuestBusy] = useState(false);
   const [guestError, setGuestError] = useState<string | null>(null);
+  const [nextCode, setNextCode] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URL(window.location.href).searchParams;
     const s = params.get("login") as Status;
     if (s === "ok" || s === "cancelled" || s === "invalid") setStatus(s);
+    setNextCode(readNext());
   }, []);
+
+  // After login, the user wants to land on the room they were invited to.
+  // Fallback is the lobby like before.
+  const destAfterLogin = nextCode ? `/room?code=${encodeURIComponent(nextCode)}` : "/lobby";
+  const steamLoginHref = nextCode
+    ? `/api/auth/steam?next=${encodeURIComponent(nextCode)}`
+    : "/api/auth/steam";
 
   const submitGuest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +60,7 @@ export default function LoginPage() {
         setGuestError("Pseudo refusé. Essaie un autre.");
         return;
       }
-      router.replace("/lobby");
+      router.replace(destAfterLogin);
     } catch {
       setGuestError("Connexion au serveur impossible.");
     } finally {
@@ -61,7 +79,12 @@ export default function LoginPage() {
         {status === "invalid" && (
           <p className="auth-error">Connexion invalide. Réessaie.</p>
         )}
-        <a className="auth-btn" href="/api/auth/steam">
+        {nextCode && (
+          <p className="auth-subtitle">
+            Tu vas rejoindre la room <strong>{nextCode}</strong> après connexion.
+          </p>
+        )}
+        <a className="auth-btn" href={steamLoginHref}>
           Se connecter avec Steam
         </a>
 

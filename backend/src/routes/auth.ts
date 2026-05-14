@@ -50,15 +50,26 @@ function makeGuestAvatar(name: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+// Room codes are 4-8 alphanumeric chars (uppercase). Anything else in `next`
+// is rejected so the param can't be used to open-redirect off-site.
+const ROOM_CODE_RE = /^[A-Z0-9]{4,8}$/;
+function sanitizeNext(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const code = raw.toUpperCase();
+  return ROOM_CODE_RE.test(code) ? code : undefined;
+}
+
 // GET /api/auth/steam — kick off Steam OpenID by 302-ing to Steam.
 router.get("/steam", (req, res) => {
   const pair = typeof req.query.pair === "string" ? req.query.pair : undefined;
-  res.redirect(buildLoginUrl(pair));
+  const next = sanitizeNext(req.query.next);
+  res.redirect(buildLoginUrl(pair, next));
 });
 
 // GET /api/auth/steam/callback — Steam redirects here with openid.* params.
 router.get("/steam/callback", async (req, res) => {
   const pair = typeof req.query.pair === "string" ? req.query.pair : null;
+  const next = sanitizeNext(req.query.next);
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(req.query)) {
     if (typeof value === "string") params.set(key, value);
@@ -100,8 +111,9 @@ router.get("/steam/callback", async (req, res) => {
       path: attrs.path,
       maxAge: attrs.maxAge * 1000,
     });
-    console.log("[steam/callback] cookie set, redirecting to /lobby");
-    res.redirect("/lobby");
+    const dest = next ? `/room?code=${encodeURIComponent(next)}` : "/lobby";
+    console.log(`[steam/callback] cookie set, redirecting to ${dest}`);
+    res.redirect(dest);
   } catch (err) {
     console.error("[steam/callback] error:", err);
     redirectFor(res, pair, "invalid");

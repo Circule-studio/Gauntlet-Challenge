@@ -4,20 +4,36 @@ import { useEffect, useState } from "react";
 import type { SteamSessionUser } from "@/lib/types/steam";
 
 export function useMe(): SteamSessionUser | null {
-  const [me, setMe] = useState<SteamSessionUser | null>(null);
+  const { user } = useMeStatus();
+  return user;
+}
+
+/**
+ * Tri-state auth helper:
+ *   loading=true              → /api/me hasn't responded yet
+ *   loading=false, user=null  → not authenticated
+ *   loading=false, user=set   → authenticated
+ *
+ * Use this when you need to distinguish "still loading" from "no session" —
+ * e.g. to redirect anonymous visitors to /login without flickering for
+ * authenticated users while the fetch is in flight.
+ */
+export function useMeStatus(): { user: SteamSessionUser | null; loading: boolean } {
+  const [user, setUser] = useState<SteamSessionUser | null>(null);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/me")
-      .then((r) => {
-        if (!r.ok) return null;
-        return r.json();
-      })
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        // Guard: vérifie que c'est bien un user et pas un objet d'erreur
+        if (cancelled) return;
         if (data && typeof data === "object" && "steamId" in data) {
-          setMe(data as SteamSessionUser);
+          setUser(data as SteamSessionUser);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
-  return me;
+  return { user, loading };
 }

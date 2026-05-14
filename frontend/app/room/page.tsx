@@ -13,7 +13,7 @@ import {
  type RunHistoryEntry,
 } from "@/lib/types";
 import { useRoom } from "@/lib/client/use-room";
-import { useMe } from "@/lib/client/use-me";
+import { useMeStatus } from "@/lib/client/use-me";
 import { isGuestId, isBotId, isSyntheticId } from "@/lib/types/steam";
 
 // === ICONS (Lucide-style inline SVG) ===
@@ -234,12 +234,19 @@ function RoomPageInner() {
  const searchParams = useSearchParams();
  const router = useRouter();
  const roomCode = (searchParams.get("code") ?? "").toUpperCase();
- // Pas de code → retour au lobby
+ const { user: me, loading: meLoading } = useMeStatus();
+ // Pas de code → retour au lobby. Code présent mais pas authentifié → login avec
+ // `next` pour revenir directement à la room après connexion.
  useEffect(() => {
-   if (!roomCode) router.replace("/lobby");
- }, [roomCode, router]);
+   if (!roomCode) {
+     router.replace("/lobby");
+     return;
+   }
+   if (!meLoading && me === null) {
+     router.replace(`/login?next=${encodeURIComponent(roomCode)}`);
+   }
+ }, [roomCode, me, meLoading, router]);
  const { state, setState, members, ownerSteamId, connected, closed, addBot, removeBot, startTimer: socketStartTimer, clearTimer: socketClearTimer } = useRoom(roomCode);
- const me = useMe();
  const isHost = !!me && !!ownerSteamId && me.steamId === ownerSteamId;
  // Map displayName -> avatarUrl for the champion slot machine. Names are unique
  // within a room (the lobby enforces this), so a flat map is safe.
@@ -690,7 +697,9 @@ function RoomPageInner() {
  };
 
  const copyRoomLink = async () => {
-   const url = `${window.location.origin}/room/${roomCode}`;
+   // Static export ne supporte pas /room/[code], on utilise le query param qui
+   // est lu par useSearchParams dans RoomPageInner.
+   const url = `${window.location.origin}/room?code=${encodeURIComponent(roomCode)}`;
    try {
      await navigator.clipboard.writeText(url);
    } catch {

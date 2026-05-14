@@ -11,12 +11,15 @@ import { env } from "./env";
 
 const STEAM_OPENID_ENDPOINT = "https://steamcommunity.com/openid/login";
 
-export function buildLoginUrl(pairCode?: string): string {
-  // Append the pair code as a query param on return_to. Steam preserves it through
-  // the round-trip, so the callback can read it and route to the pairing flow.
-  const returnTo = pairCode
-    ? `${env.STEAM_RETURN_URL}?pair=${encodeURIComponent(pairCode)}`
-    : env.STEAM_RETURN_URL;
+export function buildLoginUrl(pairCode?: string, next?: string): string {
+  // Append optional state as a query param on return_to. Steam preserves it
+  // through the round-trip, so the callback can read it and route the user
+  // back to wherever they came from (pairing flow, room invite link, etc.).
+  const state = new URLSearchParams();
+  if (pairCode) state.set("pair", pairCode);
+  if (next) state.set("next", next);
+  const stateQs = state.toString();
+  const returnTo = stateQs ? `${env.STEAM_RETURN_URL}?${stateQs}` : env.STEAM_RETURN_URL;
   const params = new URLSearchParams({
     "openid.ns": "http://specs.openid.net/auth/2.0",
     "openid.mode": "checkid_setup",

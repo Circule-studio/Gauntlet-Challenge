@@ -137,6 +137,97 @@ html, body {
   margin-bottom: 16px;
   box-shadow: none;
 }
+
+/* === CONFIG STEPPER === */
+.config-stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.config-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.config-step:hover { border-color: var(--accent); color: var(--text); }
+.config-step.active {
+  background: var(--bg-0);
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+.config-step.done {
+  border-color: rgba(74, 222, 128, 0.4);
+  color: var(--text);
+}
+.config-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-0);
+  border: 1px solid currentColor;
+  font-weight: 700;
+  font-size: 11px;
+}
+.config-step.active .config-step-num { background: var(--accent); color: var(--bg-0); border-color: var(--accent); }
+.config-step-label { text-transform: uppercase; letter-spacing: 0.06em; }
+.config-stepper-sep {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  max-width: 80px;
+}
+.config-step-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.config-step-actions-top {
+  justify-content: flex-start;
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding-top: 0;
+  padding-bottom: 16px;
+  border-top: none;
+  border-bottom: 1px solid var(--line);
+}
+/* btn-config-next inherits its visual style from `.btn .btn-large .btn-start`
+   (matches the primary "Générer la run" CTA). This class is kept only for
+   targeted overrides if needed in the future. */
+.btn-config-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-config-back:hover { border-color: var(--accent); color: var(--text); }
 .panel-section-num {
   display: inline-flex;
   align-items: center;
@@ -279,6 +370,31 @@ html, body {
   color: #9146ff;
   flex-shrink: 0;
 }
+.steam-link-host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  color: #fbbf24;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.4));
+}
+.host-only-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(203, 213, 225, 0.08);
+  border: 1px solid rgba(203, 213, 225, 0.18);
+  color: var(--muted);
+  cursor: help;
+  vertical-align: middle;
+}
+.host-only-badge svg { display: block; }
 .steam-link.linked.bot {
   border-color: rgba(203, 213, 225, 0.25);
   border-style: dashed;
@@ -558,6 +674,25 @@ html, body {
   border: 1px solid var(--line);
   border-radius: 10px;
 }
+.room-banner-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--text);
+}
+.room-banner-host-crown { color: #fbbf24; display: inline-flex; align-items: center; }
+.room-banner-host-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+.room-banner-host-name { font-weight: 600; }
 .room-banner-actions { display: flex; gap: 8px; }
 .room-banner-btn {
   background: var(--bg-0);
@@ -1736,6 +1871,7 @@ html, body {
   opacity: 0.7;
 }
 .vs-scoreboard {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -1747,6 +1883,40 @@ html, body {
   border-radius: 6px;
   background: var(--bg-1);
 }
+.vs-shuffle-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.vs-shuffle-btn:hover { border-color: var(--accent); color: var(--accent); transform: rotate(15deg); }
+.btn-team-shuffle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: var(--bg-0);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-team-shuffle:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-team-shuffle:disabled { opacity: 0.5; cursor: not-allowed; }
 .vs-team {
   display: flex;
   flex-direction: column;
@@ -1848,88 +2018,109 @@ html, body {
 .run-length-slider-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px 10px;
+  gap: 6px;
+  /* Horizontal padding equal to the custom thumb's radius (11px = 22/2) so the
+     rail's 0%–100% coordinate space matches the visible width — both the
+     thumb and the ticks land inside the wrap at the extremes. */
+  padding: 14px 11px 10px;
   background: var(--bg-0);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
-.run-length-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 18px;
-  background: transparent;
-  outline: none;
-  cursor: pointer;
-  margin: 4px 0;
-  padding: 0;
-  border: 0;
+.run-length-rail {
+  position: relative;
+  height: 22px;
 }
-.run-length-slider:disabled { opacity: 0.5; cursor: not-allowed; }
-.run-length-slider::-webkit-slider-runnable-track {
+.run-length-rail-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
   height: 8px;
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    var(--accent) 0%,
-    var(--accent) var(--pct, 100%),
-    var(--line) var(--pct, 100%),
-    var(--line) 100%
-  );
+  transform: translateY(-50%);
+  background: var(--line);
   border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
   box-sizing: border-box;
 }
-.run-length-slider::-moz-range-track {
-  height: 8px;
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    var(--accent) 0%,
-    var(--accent) var(--pct, 100%),
-    var(--line) var(--pct, 100%),
-    var(--line) 100%
-  );
-  border: 1px solid var(--line);
-  box-sizing: border-box;
-}
-.run-length-slider::-moz-range-progress {
-  height: 8px;
+.run-length-rail-fill {
+  height: 100%;
   background: var(--accent);
   border-radius: 999px 0 0 999px;
+  transition: width 0.05s linear;
 }
+.run-length-rail-thumb {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-0);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s, left 0.05s linear;
+  z-index: 2;
+}
+.run-length-rail-thumb.disabled { opacity: 0.5; }
+.run-length-rail:hover .run-length-rail-thumb:not(.disabled) {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+.run-length-rail:focus-within .run-length-rail-thumb:not(.disabled) {
+  box-shadow: 0 0 0 4px rgba(108, 181, 212, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.run-length-slider {
+  /* Native input is invisible; only handles pointer/keyboard interaction.
+     Positioned over the rail so users can drag/click anywhere on it. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  opacity: 0;
+  z-index: 3;
+}
+.run-length-slider:disabled { cursor: not-allowed; }
 .run-length-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg-0);
+  width: 22px;
+  height: 22px;
   cursor: pointer;
-  margin-top: -6px;
-  transition: transform 0.1s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
-.run-length-slider:hover::-webkit-slider-runnable-track { filter: brightness(1.05); }
-.run-length-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
 .run-length-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg-0);
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 .run-length-ticks {
-  display: flex;
-  justify-content: space-between;
+  /* Tick centers are positioned at the SAME percentages as the custom thumb
+     (0% for value 1, 100% for value 10) using absolute positioning + translateX
+     (-50%). The wrap's horizontal padding (11px = thumb radius) ensures the
+     edge ticks render inside the wrap. */
+  position: relative;
+  height: 14px;
   font-size: 10px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-  padding: 0 2px;
   user-select: none;
+}
+.run-length-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  line-height: 14px;
 }
 .run-length-tick.on { color: var(--text); font-weight: 600; }
 .slot-machine.locked .slot-strip { animation: none; }
@@ -2420,6 +2611,30 @@ body.shake { animation: none; }
   color: var(--muted);
   font-style: italic;
 }
+.powerups-panel-disabled {
+  opacity: 0.55;
+  background: transparent;
+  border-style: dashed;
+}
+.powerups-disabled-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+.powerups-disabled-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.room-sidebar.disabled { z-index: 5; }
 .powerup-card {
   display: flex;
   flex-direction: column;

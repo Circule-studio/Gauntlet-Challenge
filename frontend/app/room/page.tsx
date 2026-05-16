@@ -42,12 +42,14 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
   bot: (<><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="11"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></>),
   plus: (<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>),
   clock: (<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>),
+  crown: (<><polygon points="3 17 6 7 10 11 12 5 14 11 18 7 21 17 3 17"/><line x1="3" y1="20" x2="21" y2="20"/></>),
+  lock: (<><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>),
 };
 function Icon({ name, size = 14, fill = "none" }: { name: string; size?: number; fill?: string }) {
   const path = ICON_PATHS[name];
   if (!path) return null;
   const strokeWidth = name === "check" || name === "x" ? 2.5 : 2;
-  const fillProp = name === "star" ? "currentColor" : fill;
+  const fillProp = name === "star" || name === "crown" ? "currentColor" : fill;
   return (
     <span className="icon">
       <svg width={size} height={size} viewBox="0 0 24 24" fill={fillProp} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">{path}</svg>
@@ -260,6 +262,10 @@ function RoomPageInner() {
  const hydrated = true;
  const [localSearch, setLocalSearch] = useState("");
  const [localFilter, setLocalFilter] = useState("all");
+ // Two-step config flow: first the room config (player slots, difficulty, etc.),
+ // validated, then the game pool selection. Local to each viewer so they can
+ // independently flip between the two panels.
+ const [configStep, setConfigStep] = useState<"config" | "pool">("config");
  const [overlay, setOverlay] = useState<{ kind: "win" | "lose" | null; msg?: string }>({ kind: null });
  const [swappedIdx, setSwappedIdx] = useState<number | null>(null);
  const [shaking, setShaking] = useState(false);
@@ -1334,6 +1340,16 @@ function RoomPageInner() {
 
  const stats = computeStats();
  const totalSegs = state.run.length || 10;
+ // Tooltip text shown when a non-host hovers a host-only setting. The `disabled`
+ // state alone doesn't tell them WHY — this is the explanation.
+ const hostOnlyHint = !isHost ? "Seul l'hôte peut modifier ce paramètre" : undefined;
+ // Small lock badge rendered next to host-only labels so non-hosts immediately
+ // see the field is locked, with the same tooltip on hover.
+ const HostOnlyBadge = !isHost ? (
+   <span className="host-only-badge" title={hostOnlyHint} aria-label={hostOnlyHint}>
+     <Icon name="lock" size={11} />
+   </span>
+ ) : null;
 
  return (
  <>
@@ -1344,8 +1360,9 @@ function RoomPageInner() {
 
  <div className="room-layout">
  {/* Mirror spacer — keeps `room-main` centered between the spacer (left) and
-     the Atouts sidebar (right). Rendered only when the sidebar is rendered. */}
- {state.powerUpsEnabled !== false && <div className="room-spacer" aria-hidden="true" />}
+     the Atouts sidebar (right). The sidebar is always rendered now (showing a
+     compact "disabled" state when powerUps are off), so the spacer stays too. */}
+ <div className="room-spacer" aria-hidden="true" />
  <div className="room-main">
  {/* ROOM BANNER */}
  <div className="room-banner">
@@ -1353,6 +1370,17 @@ function RoomPageInner() {
      <span className="room-banner-label">Room</span>
      <span className="room-banner-code">{roomCode}</span>
      <span className="room-banner-members">{members.length} joueur{members.length > 1 ? "s" : ""}</span>
+     {(() => {
+       const hostMember = ownerSteamId ? members.find((m) => m.steamId === ownerSteamId) : null;
+       if (!hostMember) return null;
+       return (
+         <span className="room-banner-host" title={`Hôte de la room : ${hostMember.displayName}`}>
+           <span className="room-banner-host-crown" aria-hidden="true"><Icon name="crown" size={12} /></span>
+           <img src={hostMember.avatarUrl} alt="" className="room-banner-host-avatar" />
+           <span className="room-banner-host-name">{hostMember.displayName}</span>
+         </span>
+       );
+     })()}
      <span className={`room-sync-status ${connected ? "ok" : "lost"}`} title={connected ? "Sync en temps réel active" : "Connexion perdue — les actions ne se synchronisent pas"}>
        <span className="room-sync-dot"></span>
        {connected ? "Sync" : "Hors-ligne"}
@@ -1394,6 +1422,17 @@ function RoomPageInner() {
           </div>
           {state.versusMode && (
             <div className="vs-scoreboard" aria-label="Score Versus">
+              {isHost && !runLocked && (
+                <button
+                  type="button"
+                  className="vs-shuffle-btn"
+                  onClick={() => assignVersusTeams()}
+                  title="Mélanger les équipes au hasard"
+                  aria-label="Mélanger les équipes au hasard"
+                >
+                  <Icon name="dice" size={14} />
+                </button>
+              )}
               <div className="vs-team vs-team-red">
                 <div className="vs-team-label">Équipe Rouge</div>
                 <div className="vs-team-score">{versusScore.red}</div>
@@ -1404,7 +1443,7 @@ function RoomPageInner() {
                       <span
                         key={m.steamId}
                         className="vs-roster-chip"
-                        title={isHost ? "Cliquer pour changer d'équipe" : m.displayName}
+                        title={isHost ? "Cliquer pour changer d'équipe" : `${m.displayName} — seul l'hôte peut changer les équipes`}
                         onClick={isHost ? () => togglePlayerTeam(m.steamId) : undefined}
                         role={isHost ? "button" : undefined}
                       >
@@ -1425,7 +1464,7 @@ function RoomPageInner() {
                       <span
                         key={m.steamId}
                         className="vs-roster-chip"
-                        title={isHost ? "Cliquer pour changer d'équipe" : m.displayName}
+                        title={isHost ? "Cliquer pour changer d'équipe" : `${m.displayName} — seul l'hôte peut changer les équipes`}
                         onClick={isHost ? () => togglePlayerTeam(m.steamId) : undefined}
                         role={isHost ? "button" : undefined}
                       >
@@ -1439,9 +1478,36 @@ function RoomPageInner() {
           )}
  </div>
 
- {/* CONFIG — hidden once a run is generated. Reopens after Reset complet. */}
+ {/* CONFIG — hidden once a run is generated. Reopens after Reset complet.
+     Two-step flow: first the room configuration, then the pool selection. The
+     stepper lets users jump between the two panels; the "Valider" button on
+     panel 1 is the natural progression. */}
  {!runLocked && (
  <>
+ <div className="config-stepper" role="tablist" aria-label="Étapes de configuration">
+   <button
+     type="button"
+     role="tab"
+     aria-selected={configStep === "config"}
+     className={`config-step ${configStep === "config" ? "active" : "done"}`}
+     onClick={() => setConfigStep("config")}
+   >
+     <span className="config-step-num">1</span>
+     <span className="config-step-label">Configuration</span>
+   </button>
+   <span className="config-stepper-sep" aria-hidden="true" />
+   <button
+     type="button"
+     role="tab"
+     aria-selected={configStep === "pool"}
+     className={`config-step ${configStep === "pool" ? "active" : ""}`}
+     onClick={() => setConfigStep("pool")}
+   >
+     <span className="config-step-num">2</span>
+     <span className="config-step-label">Sélection du pool</span>
+   </button>
+ </div>
+ {configStep === "config" && (
  <div className="panel">
  <h2>
    <span className="panel-title"><span className="panel-section-num">1</span> Configuration</span>
@@ -1459,6 +1525,11 @@ function RoomPageInner() {
    <span className="steam-link-name" title={isBotId(member.steamId) ? "Bot local" : "Joueur invité"}>{member.displayName}</span>
  ) : (
    <a className="steam-link-name" href={member.profileUrl} target="_blank" rel="noreferrer">{member.displayName}</a>
+ )}
+ {!!ownerSteamId && member.steamId === ownerSteamId && (
+   <span className="steam-link-host" title="Hôte de la room" aria-label="Hôte de la room">
+     <Icon name="crown" size={14} />
+   </span>
  )}
  {isBotId(member.steamId) && (
    <span className="steam-link-badge" title="Bot local">
@@ -1520,39 +1591,46 @@ function RoomPageInner() {
  </div>
 
  <div className="field"style={{ marginTop: 18 }}>
- <label>Difficulté</label>
- <div className="toggle-group">
+ <label>Difficulté{HostOnlyBadge}</label>
+ <div className="toggle-group" title={hostOnlyHint}>
  <button
  className={`toggle ${state.difficulty === "normal" ? "active" : ""}`}
  onClick={() => update({ difficulty: "normal"as Difficulty })}
- disabled={runLocked}
+ disabled={runLocked || !isHost}
+ title={hostOnlyHint ?? "Objectifs accessibles — souvent finir, atteindre un palier ou un Top X"}
  >
  Normal
  </button>
  <button
  className={`toggle hardcore ${state.difficulty === "hardcore" ? "active" : ""}`}
  onClick={() => update({ difficulty: "hardcore"as Difficulty })}
- disabled={runLocked}
+ disabled={runLocked || !isHost}
+ title={hostOnlyHint ?? "Objectifs exigeants — gagner, enchaîner plusieurs victoires, ou jouer en mode hard"}
  >
  Hardcore
  </button>
  </div>
+ <p className="field-hint">
+   <strong>Normal</strong> : objectifs <strong>accessibles</strong> (atteindre un Top, finir un niveau, un round gagné). <strong>Hardcore</strong> : objectifs <strong>exigeants</strong> (gagner, enchaîner plusieurs victoires d'affilée, ou jouer en mode hard).
+ </p>
  </div>
 
  <div className="field"style={{ marginTop: 18 }}>
- <label>Pénalité en cas de défaite</label>
- <div className="toggle-group">
+ <label>Pénalité en cas de défaite{HostOnlyBadge}</label>
+ <div className="toggle-group" title={hostOnlyHint}>
  <button
  className={`toggle ${state.penaltyMode === "reset" ? "active" : ""}`}
  onClick={() => update({ penaltyMode: "reset"as PenaltyMode })}
- disabled={runLocked}
+ disabled={runLocked || !isHost}
+ title={hostOnlyHint}
  >
  Reset complet (retour jeu 1)
  </button>
  <button
  className={`toggle ${state.penaltyMode === "stepback" ? "active" : ""}`}
  onClick={() => update({ penaltyMode: "stepback"as PenaltyMode })}
- disabled={runLocked}
+ disabled={runLocked || !isHost}
+ title={hostOnlyHint}
  >
  Recule d&apos;un jeu
  </button>
@@ -1560,19 +1638,21 @@ function RoomPageInner() {
  </div>
 
  <div className="field"style={{ marginTop: 18 }}>
- <label>Atouts (Joker, Bouclier, Relance)</label>
- <div className="toggle-group">
+ <label>Atouts (Joker, Bouclier, Relance){HostOnlyBadge}</label>
+ <div className="toggle-group" title={hostOnlyHint}>
  <button
    className={`toggle ${state.powerUpsEnabled !== false ? "active" : ""}`}
    onClick={() => update({ powerUpsEnabled: true })}
-   disabled={runLocked}
+   disabled={runLocked || !isHost}
+   title={hostOnlyHint}
  >
    Activés
  </button>
  <button
    className={`toggle ${state.powerUpsEnabled === false ? "active" : ""}`}
    onClick={() => update({ powerUpsEnabled: false })}
-   disabled={runLocked}
+   disabled={runLocked || !isHost}
+   title={hostOnlyHint}
  >
    Désactivés
  </button>
@@ -1582,36 +1662,64 @@ function RoomPageInner() {
  <div className="field"style={{ marginTop: 18 }}>
  <label>
    Longueur de la run
+   {HostOnlyBadge}
    <span className="run-length-value">{state.runLength ?? 10} jeux</span>
  </label>
- <div className="run-length-slider-wrap">
-   <input
-     type="range"
-     className="run-length-slider"
-     min={1}
-     max={10}
-     step={1}
-     value={state.runLength ?? 10}
-     onChange={(e) => update({ runLength: Math.max(1, Math.min(10, Number(e.target.value))) })}
-     disabled={runLocked || !isHost}
-     aria-label="Longueur de la run"
-     style={{ "--pct": `${((state.runLength ?? 10) - 1) / 9 * 100}%` } as React.CSSProperties}
-   />
-   <div className="run-length-ticks" aria-hidden="true">
-     {Array.from({ length: 10 }, (_, i) => (
-       <span key={i} className={`run-length-tick ${i + 1 <= (state.runLength ?? 10) ? "on" : ""}`}>{i + 1}</span>
-     ))}
-   </div>
- </div>
+ {(() => {
+   // Fully custom slider visuals: the native <input type=range> is invisible
+   // and only handles input. The visible track, fill, thumb, and ticks all use
+   // the SAME `pct` percentage, so alignment is guaranteed regardless of
+   // browser-specific thumb positioning quirks.
+   const value = state.runLength ?? 10;
+   const pct = ((value - 1) / 9) * 100;
+   return (
+     <div className="run-length-slider-wrap" title={hostOnlyHint}>
+       <div className="run-length-rail">
+         <div className="run-length-rail-track">
+           <div className="run-length-rail-fill" style={{ width: `${pct}%` }} />
+         </div>
+         <div
+           className={`run-length-rail-thumb${runLocked || !isHost ? " disabled" : ""}`}
+           style={{ left: `${pct}%` }}
+           aria-hidden="true"
+         />
+         <input
+           type="range"
+           className="run-length-slider"
+           min={1}
+           max={10}
+           step={1}
+           value={value}
+           onChange={(e) => update({ runLength: Math.max(1, Math.min(10, Number(e.target.value))) })}
+           disabled={runLocked || !isHost}
+           aria-label="Longueur de la run"
+           title={hostOnlyHint}
+         />
+       </div>
+       <div className="run-length-ticks" aria-hidden="true">
+         {Array.from({ length: 10 }, (_, i) => (
+           <span
+             key={i}
+             className={`run-length-tick ${i + 1 <= value ? "on" : ""}`}
+             style={{ left: `${(i / 9) * 100}%` }}
+           >
+             {i + 1}
+           </span>
+         ))}
+       </div>
+     </div>
+   );
+ })()}
  </div>
 
  <div className="field"style={{ marginTop: 18 }}>
- <label>Bibliothèque Steam uniquement</label>
- <div className="toggle-group">
+ <label>Bibliothèque Steam uniquement{HostOnlyBadge}</label>
+ <div className="toggle-group" title={hostOnlyHint}>
  <button
    className={`toggle ${!state.libraryOnlyMode ? "active" : ""}`}
    onClick={() => update({ libraryOnlyMode: false })}
    disabled={runLocked || !isHost}
+   title={hostOnlyHint}
  >
    Tout le pool
  </button>
@@ -1619,7 +1727,7 @@ function RoomPageInner() {
    className={`toggle ${state.libraryOnlyMode ? "active" : ""}`}
    onClick={() => update({ libraryOnlyMode: true })}
    disabled={runLocked || !isHost}
-   title="Ne tirer que des jeux qu'au moins un joueur a dans sa bibliothèque Steam"
+   title={hostOnlyHint ?? "Ne tirer que des jeux qu'au moins un joueur a dans sa bibliothèque Steam"}
  >
    Bibliothèque commune
  </button>
@@ -1630,12 +1738,13 @@ function RoomPageInner() {
  </div>
 
  <div className="field"style={{ marginTop: 18 }}>
- <label>Mode de tirage</label>
- <div className="toggle-group">
+ <label>Mode de tirage{HostOnlyBadge}</label>
+ <div className="toggle-group" title={hostOnlyHint}>
  <button
    className={`toggle ${!state.leastPlayedMode ? "active" : ""}`}
    onClick={() => update({ leastPlayedMode: false })}
    disabled={runLocked || !isHost}
+   title={hostOnlyHint}
  >
    Aléatoire
  </button>
@@ -1643,7 +1752,7 @@ function RoomPageInner() {
    className={`toggle ${state.leastPlayedMode ? "active" : ""}`}
    onClick={() => update({ leastPlayedMode: true })}
    disabled={runLocked || !isHost}
-   title="Force les jeux que vous avez le moins joués dans vos précédentes runs"
+   title={hostOnlyHint ?? "Force les jeux que vous avez le moins joués dans vos précédentes runs"}
  >
    Moins joués
  </button>
@@ -1654,12 +1763,13 @@ function RoomPageInner() {
  </div>
 
  <div className="field"style={{ marginTop: 18 }}>
- <label>Mode VS (versus)</label>
- <div className="toggle-group">
+ <label>Mode VS (versus){HostOnlyBadge}</label>
+ <div className="toggle-group" title={hostOnlyHint}>
  <button
    className={`toggle ${!state.versusMode ? "active" : ""}`}
    onClick={() => update({ versusMode: false, teams: {}, gameWinners: {} })}
    disabled={runLocked || !isHost}
+   title={hostOnlyHint}
  >
    Coopératif
  </button>
@@ -1667,21 +1777,53 @@ function RoomPageInner() {
    className={`toggle vs-toggle ${state.versusMode ? "active" : ""}`}
    onClick={() => assignVersusTeams()}
    disabled={runLocked || !isHost}
-   title="Deux équipes s'affrontent — Rouge vs Bleue"
+   title={hostOnlyHint ?? "Deux équipes s'affrontent — Rouge vs Bleue"}
  >
    Rouge vs Bleue
  </button>
  </div>
  {state.versusMode && (
-   <p className="field-hint">
-     Chaque jeu est gagné par <strong>une seule équipe</strong>. À la fin, l'équipe avec le plus de victoires l'emporte.
-   </p>
+   <>
+     <button
+       type="button"
+       className="btn btn-team-shuffle"
+       onClick={() => assignVersusTeams()}
+       disabled={runLocked || !isHost}
+       title={hostOnlyHint ?? "Re-tirer les équipes au hasard"}
+     >
+       <Icon name="dice" size={14} /> Mélanger les équipes
+     </button>
+     <p className="field-hint">
+       Chaque jeu est gagné par <strong>une seule équipe</strong>. À la fin, l'équipe avec le plus de victoires l'emporte.
+     </p>
+   </>
  )}
  </div>
+ <div className="config-step-actions">
+   <button
+     type="button"
+     className="btn btn-large btn-start btn-config-next"
+     onClick={() => setConfigStep("pool")}
+   >
+     <Icon name="check" size={16} /> Valider la configuration
+   </button>
  </div>
+ </div>
+ )}
 
  {/* POOL */}
+ {configStep === "pool" && (
  <div className="panel">
+ <div className="config-step-actions config-step-actions-top">
+   <button
+     type="button"
+     className="btn btn-config-back"
+     onClick={() => setConfigStep("config")}
+     title="Revenir à la configuration"
+   >
+     <Icon name="refresh" size={14} /> Modifier la configuration
+   </button>
+ </div>
  <h2><span className="panel-title"><span className="panel-section-num">2</span> Sélection du pool</span><span className="badge">{state.pinned.length} / {pinCap(state.runLength ?? 10)} épinglés</span>
  </h2>
  <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 14 }}>
@@ -1780,6 +1922,7 @@ function RoomPageInner() {
    </div>
  )}
  </div>
+ )}
  </>
  )}
 
@@ -1803,6 +1946,11 @@ function RoomPageInner() {
    <span className="steam-link-name" title={isBotId(member.steamId) ? "Bot local" : "Joueur invité"}>{member.displayName}</span>
  ) : (
    <a className="steam-link-name" href={member.profileUrl} target="_blank" rel="noreferrer">{member.displayName}</a>
+ )}
+ {!!ownerSteamId && member.steamId === ownerSteamId && (
+   <span className="steam-link-host" title="Hôte de la room" aria-label="Hôte de la room">
+     <Icon name="crown" size={14} />
+   </span>
  )}
  {isBotId(member.steamId) && (
    <span className="steam-link-badge" title="Bot local">
@@ -2268,10 +2416,15 @@ function RoomPageInner() {
 
  </div>{/* end room-main */}
 
- {state.powerUpsEnabled !== false && <aside className="room-sidebar">
-   <div className="powerups-panel">
+ <aside className={`room-sidebar${state.powerUpsEnabled === false ? " disabled" : ""}`}>
+   <div className={`powerups-panel${state.powerUpsEnabled === false ? " powerups-panel-disabled" : ""}`}>
      <div className="powerups-title">⚡ Atouts</div>
-     {members.length === 0 ? (
+     {state.powerUpsEnabled === false ? (
+       <div className="powerups-disabled-msg">
+         <span className="powerups-disabled-icon"><Icon name="x" size={14} /></span>
+         Désactivés pour cette run
+       </div>
+     ) : members.length === 0 ? (
        <div className="powerups-empty">En attente de joueurs…</div>
      ) : members.map((member) => {
        const pu = (state.powerUps ?? {})[member.steamId] ?? { joker: 0, shield: 0, reroll: 0 };
@@ -2314,11 +2467,11 @@ function RoomPageInner() {
          </div>
        );
      })}
-     {state.shieldActive && (
+     {state.shieldActive && state.powerUpsEnabled !== false && (
        <div className="shield-active-badge">🛡️ Bouclier actif !</div>
      )}
    </div>
- </aside>}
+ </aside>
 
  </div>{/* end room-layout */}
 

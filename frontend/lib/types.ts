@@ -132,6 +132,11 @@ export interface GauntletState {
   gameWinners: Record<number, "red" | "blue">; // gameId → winning team
   // Number of games per run. Default 10; can be reduced for quicker sessions.
   runLength: number;
+  // Two-step config flow: step 1 is the room config, step 2 is the pool
+  // selection. Synced so every viewer sees the same step — when the host
+  // clicks "Valider la configuration" or "Modifier la configuration",
+  // everyone follows.
+  configStep: "config" | "pool";
 }
 
 export const DEFAULT_STATE: GauntletState = {
@@ -169,4 +174,5 @@ export const DEFAULT_STATE: GauntletState = {
   teams: {},
   gameWinners: {},
   runLength: 10,
+  configStep: "config",
 };

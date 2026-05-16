@@ -263,9 +263,14 @@ function RoomPageInner() {
  const [localSearch, setLocalSearch] = useState("");
  const [localFilter, setLocalFilter] = useState("all");
  // Two-step config flow: first the room config (player slots, difficulty, etc.),
- // validated, then the game pool selection. Local to each viewer so they can
- // independently flip between the two panels.
- const [configStep, setConfigStep] = useState<"config" | "pool">("config");
+ // validated, then the game pool selection. Stored in shared state so every
+ // viewer sees the same step — only the host can change it (mirrors the
+ // host-only nature of the rest of the config).
+ const configStep = state.configStep ?? "config";
+ const setConfigStep = (step: "config" | "pool") => {
+   if (!isHost) return;
+   update({ configStep: step });
+ };
  const [overlay, setOverlay] = useState<{ kind: "win" | "lose" | null; msg?: string }>({ kind: null });
  const [swappedIdx, setSwappedIdx] = useState<number | null>(null);
  const [shaking, setShaking] = useState(false);
@@ -1491,6 +1496,8 @@ function RoomPageInner() {
      aria-selected={configStep === "config"}
      className={`config-step ${configStep === "config" ? "active" : "done"}`}
      onClick={() => setConfigStep("config")}
+     disabled={!isHost}
+     title={hostOnlyHint}
    >
      <span className="config-step-num">1</span>
      <span className="config-step-label">Configuration</span>
@@ -1502,6 +1509,8 @@ function RoomPageInner() {
      aria-selected={configStep === "pool"}
      className={`config-step ${configStep === "pool" ? "active" : ""}`}
      onClick={() => setConfigStep("pool")}
+     disabled={!isHost}
+     title={hostOnlyHint}
    >
      <span className="config-step-num">2</span>
      <span className="config-step-label">Sélection du pool</span>
@@ -1804,6 +1813,8 @@ function RoomPageInner() {
      type="button"
      className="btn btn-large btn-start btn-config-next"
      onClick={() => setConfigStep("pool")}
+     disabled={!isHost}
+     title={hostOnlyHint}
    >
      <Icon name="check" size={16} /> Valider la configuration
    </button>
@@ -1819,7 +1830,8 @@ function RoomPageInner() {
      type="button"
      className="btn btn-config-back"
      onClick={() => setConfigStep("config")}
-     title="Revenir à la configuration"
+     disabled={!isHost}
+     title={hostOnlyHint ?? "Revenir à la configuration"}
    >
      <Icon name="refresh" size={14} /> Modifier la configuration
    </button>

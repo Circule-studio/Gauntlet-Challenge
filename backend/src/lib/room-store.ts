@@ -468,7 +468,37 @@ export function cancelPendingLeave(code: string, steamId: string): void {
  * Caller is responsible for any access-control check (membership, ownership,
  * system-trigger origin, etc.) before invoking this.
  */
-function applyMutation(r: Room, next: GauntletState): RoomSnapshot {
+// Per-member ownership / override maps are additive — each client writes only
+// its own row. When two clients near-simultaneously publish their rows, the
+// second mutation arrives with a stale snapshot that's missing the first
+// client's row, and a blind replace would wipe it. Merging row-by-row keeps
+// every contributor's data intact. Trade-off: a deliberate "clear" via mutate
+// (e.g. hardReset) can't empty these maps — but they're run-scoped so stale
+// entries don't surface until a new run reuses those appids.
+function mergeOwnershipMaps(
+  prev: Record<string, Record<string, boolean>> | undefined,
+  next: Record<string, Record<string, boolean>> | undefined,
+): Record<string, Record<string, boolean>> {
+  const result: Record<string, Record<string, boolean>> = {};
+  if (prev) {
+    for (const [k, v] of Object.entries(prev)) result[k] = { ...v };
+  }
+  if (next) {
+    for (const [k, v] of Object.entries(next)) {
+      result[k] = { ...(result[k] ?? {}), ...v };
+    }
+  }
+  return result;
+}
+
+function applyMutation(r: Room, incoming: GauntletState): RoomSnapshot {
+  // Merge ownership maps with the server's current view before doing anything
+  // else — protects against the cross-client race described above.
+  const next: GauntletState = {
+    ...incoming,
+    ownership: mergeOwnershipMaps(r.state.ownership, incoming.ownership),
+    ownershipOverride: mergeOwnershipMaps(r.state.ownershipOverride, incoming.ownershipOverride),
+  };
   const prev = r.state;
   const prevGameId = prev.run[prev.current] ?? null;
   const nextGameId = next.run[next.current] ?? null;

@@ -1,4 +1,4 @@
-# Gauntlet Challenge
+![Header](./banner.png)
 
 10 jeux à enchaîner sans une seule défaite. Multijoueur via Steam OAuth + rooms en temps réel + overlays Twitch.
 
